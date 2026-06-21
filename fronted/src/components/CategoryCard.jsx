@@ -1,0 +1,117 @@
+import React, { useEffect, useState } from "react";
+import ModalDetailsPage from "./ModalDetailsPage";
+
+const CategoryCard = ({ item }) => {
+  const [modelVisible, setModelVisible] = useState(false);
+  const [modalAnimation, setModalAnimation] = useState(false);
+  const [quantity, setQuantity] = useState(1);
+  const [selectedOption, setSelectedOption] = useState(item?.options?.[0]);
+
+  const handleOpenModal = () => {
+    setModelVisible(true);
+
+    setTimeout(() => {
+      setModalAnimation(true);
+    }, 10);
+  };
+
+  const handleCloseModal = () => {
+    setModalAnimation(false);
+
+    setTimeout(() => {
+      setModelVisible(false);
+    }, 300);
+  };
+
+  useEffect(() => {
+    if (modelVisible) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "auto";
+    }
+
+    return () => {
+      document.body.style.overflow = "auto";
+    };
+  }, [modelVisible]);
+
+  return (
+    <>
+      <div
+        className="flex items-center gap-4 p-3 transition-all duration-500 ease-in-out shadow-sm cursor-pointer
+      bg-gray-50 rounded-2xl hover:shadow-md group hover:scale-[1.02] hover:bg-red-100"
+        onClick={handleOpenModal}
+      >
+        <div className="overflow-hidden w-28 h-28 md:w-40 md:h-40 rounded-xl">
+          <img
+            src={item?.image}
+            alt={item?.title || "Item Image"}
+            className="object-cover w-full h-full transition-transform duration-500 group-hover:scale-110"
+          />
+        </div>
+
+        <div className="flex flex-col justify-between flex-1 h-full">
+          <h2 className="text-sm font-extrabold tracking-wide text-gray-800 md:text-lg">
+            {item?.title || "Item Name"}
+          </h2>
+
+          <p className="mt-1 text-xs leading-5 text-gray-500 md:text-sm line-clamp-2">
+            {item?.description}
+          </p>
+
+          <div className="flex flex-col gap-2 mt-3 text-sm">
+            {item?.options?.length > 0 ? (
+              item?.options[0]?.discountPrice ? (
+                <div className="inline-flex flex-wrap items-center gap-2 px-2 py-1 rounded-lg w-fit bg-red-50">
+                  <span className="text-gray-400 line-through">
+                    Rs. {item?.options[0]?.actualPrice}
+                  </span>
+
+                  <span className="text-[16px] font-bold text-gray-800">
+                    Rs. {item?.options[0]?.discountPrice}
+                  </span>
+                </div>
+              ) : (
+                <span className="px-2 py-1 text-lg font-bold text-gray-800 rounded-lg w-fit bg-red-50">
+                  Rs. {item?.options[0]?.actualPrice}
+                </span>
+              )
+            ) : item?.discountprice ? (
+              <div className="inline-flex items-center gap-2 px-2 py-1 rounded-lg w-fit bg-red-50">
+                <span className="text-gray-400 line-through">
+                  Rs. {item?.actualprice}
+                </span>
+
+                <span className="font-semibold text-gray-800">
+                  Rs. {item?.discountprice}
+                </span>
+              </div>
+            ) : (
+              <span className="px-2 py-1 font-semibold text-gray-800 rounded-lg w-fit bg-red-50">
+                Rs. {item?.actualprice}
+              </span>
+            )}
+
+            <button className="px-4 py-1 text-sm font-bold text-white transition-all duration-300 ease-in-out bg-red-700 rounded-md md:px-6 lg:py-2 lg:px-6 hover:bg-red-800 hover:shadow-md w-fit">
+              Add to Cart
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {modelVisible && (
+        <ModalDetailsPage
+          modalAnimation={modalAnimation}
+          item={item}
+          setQuantity={setQuantity}
+          quantity={quantity}
+          handleCloseModal={handleCloseModal}
+          selectedOption={selectedOption}
+          setSelectedOption={setSelectedOption}
+        />
+      )}
+    </>
+  );
+};
+
+export default CategoryCard;
