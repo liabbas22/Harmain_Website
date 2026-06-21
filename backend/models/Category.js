@@ -16,8 +16,13 @@ const categorySchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    description: {
+      type: String,
+      default: "",
+      trim: true,
+    },
   },
-  { timestamps: true },
+  { timestamps: true }
 );
 
 const Category =

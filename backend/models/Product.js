@@ -16,6 +16,7 @@ const productSchema = new mongoose.Schema(
     price: {
       type: Number,
       required: true,
+      min: 0,
     },
 
     image: {
@@ -37,10 +38,23 @@ const productSchema = new mongoose.Schema(
     rating: {
       type: Number,
       default: 0,
+      min: 0,
+      max: 5,
+    },
+    stock: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    tags: {
+      type: [String],
+      default: [],
     },
   },
   { timestamps: true }
 );
+
+productSchema.index({ name: "text", description: "text", tags: "text" });
 
 const Product =
   mongoose.models.Product || mongoose.model("Product", productSchema);

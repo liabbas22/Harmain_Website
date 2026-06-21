@@ -1,3 +1,97 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+.hero-swiper {
+  --swiper-navigation-color: #ffffff;
+  --swiper-pagination-color: #b91c1c;
+}
+
+.hero-swiper .swiper-button-prev,
+.hero-swiper .swiper-button-next {
+  width: 38px;
+  height: 38px;
+  padding:8px;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  background: #b91c1c !important;
+  color: #ffffff !important;
+  box-shadow: 0 6px 16px rgba(95, 20, 20, 0.32);
+  transition: transform 160ms ease, background 160ms ease;
+}
+
+.hero-swiper .swiper-button-prev {
+  left: 14px;
+}
+
+.hero-swiper .swiper-button-next {
+  right: 14px;
+}
+
+.hero-swiper .swiper-button-prev:hover,
+.hero-swiper .swiper-button-next:hover {
+  background: #991b1b !important;
+  transform: scale(1.06);
+}
+
+.hero-swiper .swiper-button-prev::after,
+.hero-swiper .swiper-button-next::after {
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.hero-swiper .swiper-pagination {
+  bottom: 14px !important;
+}
+
+.hero-swiper .swiper-pagination-bullet {
+  width: 9px;
+  height: 9px;
+  margin: 0 5px !important;
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  background: #ffffff !important;
+  opacity: 0.85 !important;
+  transition: width 160ms ease, background 160ms ease;
+}
+
+.hero-swiper .swiper-pagination-bullet-active {
+  width: 25px;
+  border-radius: 9999px;
+  background: #b91c1c !important;
+  opacity: 1 !important;
+}
+
+@media (max-width: 640px) {
+  .hero-swiper .swiper-button-prev,
+  .hero-swiper .swiper-button-next {
+    width: 30px;
+    height: 30px;
+  }
+
+  .hero-swiper .swiper-button-prev {
+    left: 9px;
+  }
+
+  .hero-swiper .swiper-button-next {
+    right: 9px;
+  }
+
+  .hero-swiper .swiper-button-prev::after,
+  .hero-swiper .swiper-button-next::after {
+    font-size: 11px;
+  }
+
+  .hero-swiper .swiper-pagination {
+    bottom: 8px !important;
+  }
+
+  .hero-swiper .swiper-pagination-bullet {
+    width: 8px;
+    height: 8px;
+    margin: 0 4px !important;
+  }
+
+  .hero-swiper .swiper-pagination-bullet-active {
+    width: 22px;
+  }
+}

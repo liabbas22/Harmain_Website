@@ -31,7 +31,7 @@ const Herosection = () => {
           pagination={{ clickable: true }}
           navigation={true}
           modules={[Pagination, Navigation, Autoplay]}
-          className="overflow-hidden shadow-lg rounded-xl"
+          className="hero-swiper overflow-hidden shadow-lg rounded-xl"
         >
 
           {slides?.map((item, index) => (

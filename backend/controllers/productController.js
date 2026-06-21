@@ -1,42 +1,40 @@
 import Product from "../models/Product.js";
+import asyncHandler from "../utils/asyncHandler.js";
 
-export const getProducts = async (req, res) => {
-  try {
-    const products = await Product.find().populate("category");
-    res.json(products);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
+export const getProducts = asyncHandler(async (req, res) => {
+  const { category, search, available, page = 1, limit = 24 } = req.query;
+  const filter = {};
+  if (category) filter.category = category;
+  if (available !== undefined) filter.isAvailable = available === "true";
+  if (search?.trim()) filter.$text = { $search: search.trim() };
+  const currentPage = Math.max(Number(page), 1);
+  const pageSize = Math.min(Math.max(Number(limit), 1), 100);
+  const [products, total] = await Promise.all([
+    Product.find(filter).populate("category").sort({ createdAt: -1 }).skip((currentPage - 1) * pageSize).limit(pageSize),
+    Product.countDocuments(filter),
+  ]);
+  res.json({ products, pagination: { page: currentPage, limit: pageSize, total } });
+});
 
-export const getProductById = async (req, res) => {
-  try {
-    const product = await Product.findById(req.params.id).populate("category");
+export const getProductById = asyncHandler(async (req, res) => {
+  const product = await Product.findById(req.params.id).populate("category");
+  if (!product) return res.status(404).json({ message: "Product not found" });
+  res.json(product);
+});
 
-    if (!product) {
-      return res.status(404).json({ message: "Product not found" });
-    }
+export const createProduct = asyncHandler(async (req, res) => {
+  const product = await Product.create(req.body);
+  res.status(201).json(product);
+});
 
-    res.json(product);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
+export const updateProduct = asyncHandler(async (req, res) => {
+  const product = await Product.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true }).populate("category");
+  if (!product) return res.status(404).json({ message: "Product not found" });
+  res.json(product);
+});
 
-export const createProduct = async (req, res) => {
-  try {
-    const product = await Product.create(req.body);
-    res.status(201).json(product);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-export const deleteProduct = async (req, res) => {
-  try {
-    const product = await Product.findByIdAndDelete(req.params.id);
-    res.json({ message: "Product deleted" });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
+export const deleteProduct = asyncHandler(async (req, res) => {
+  const product = await Product.findByIdAndDelete(req.params.id);
+  if (!product) return res.status(404).json({ message: "Product not found" });
+  res.json({ message: "Product deleted" });
+});
