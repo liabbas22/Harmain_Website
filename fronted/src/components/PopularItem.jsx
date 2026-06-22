@@ -1,9 +1,9 @@
 import React from "react";
 import { FaFire } from "react-icons/fa";
-import { PopularItemData } from "../Data/data";
+import { PopularItemData as staticPopularItems } from "../Data/data";
 import PopularItemCards from "./PopularItemCards";
 
-const PopularItem = () => {
+const PopularItem = ({ items = staticPopularItems }) => {
   return (
     <div>
       <div className="flex flex-col gap-1 py-2 mb-2 lg:py-4 md:mb-3">
@@ -15,7 +15,7 @@ const PopularItem = () => {
       </div>
 
       <div className="grid items-center grid-cols-2 gap-4 md:grid-cols-4">
-        {PopularItemData?.map((item, index) => (
+        {items?.map((item, index) => (
           <div key={index}>
             <PopularItemCards item={item} />
           </div>

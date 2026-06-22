@@ -1,11 +1,11 @@
 import React from "react";
-import { categoriesData } from "../Data/data";
+import { categoriesData as staticCategoriesData } from "../Data/data";
 import CategoryCard from "./CategoryCard";
 
-const CategoryData = () => {
+const CategoryData = ({ categories = staticCategoriesData }) => {
   return (
     <div className="py-0 space-y-10 md:py-4 lg:py-8 ">
-      {categoriesData?.map((category) => (
+      {categories?.map((category) => (
         <div key={category.id}>
           <div className="relative">
             <img

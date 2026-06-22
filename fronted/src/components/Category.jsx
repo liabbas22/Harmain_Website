@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Swiper, SwiperSlide } from "swiper/react";
-import { categories } from "../Data/data.js";
+import { categories as staticCategories } from "../Data/data.js";
 import { FaChevronLeft, FaChevronRight } from "react-icons/fa";
 
 import "swiper/css";
 import Title from "./Title.jsx";
 
-const Category = () => {
+const Category = ({ categories = staticCategories }) => {
   const swiperRef = useRef(null);
   const [showStickyCategory, setShowStickyCategory] = useState(false);
   useEffect(() => {
