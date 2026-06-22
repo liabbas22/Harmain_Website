@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import ModalDetailsPage from "./ModalDetailsPage";
+import api from "../api";
 
 const CategoryCard = ({ item }) => {
   const [modelVisible, setModelVisible] = useState(false);
@@ -21,6 +22,11 @@ const CategoryCard = ({ item }) => {
     setTimeout(() => {
       setModelVisible(false);
     }, 300);
+  };
+  const addToCart = async (event) => {
+    event.stopPropagation();
+    if (!localStorage.getItem("harmain_token")) return window.location.assign("/login");
+    try { await api.post("/cart", { productId: item.id, quantity: 1 }); window.dispatchEvent(new Event("harmain-cart-updated")); } catch (error) { alert(error.response?.data?.message || "Could not add item to cart"); }
   };
 
   useEffect(() => {
@@ -92,7 +98,7 @@ const CategoryCard = ({ item }) => {
               </span>
             )}
 
-            <button className="px-4 py-1 text-sm font-bold text-white transition-all duration-300 ease-in-out bg-red-700 rounded-md md:px-6 lg:py-2 lg:px-6 hover:bg-red-800 hover:shadow-md w-fit">
+            <button onClick={addToCart} className="px-4 py-1 text-sm font-bold text-white transition-all duration-300 ease-in-out bg-red-700 rounded-md md:px-6 lg:py-2 lg:px-6 hover:bg-red-800 hover:shadow-md w-fit">
               Add to Cart
             </button>
           </div>

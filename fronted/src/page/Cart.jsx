@@ -1,11 +1,15 @@
-import React from 'react'
+import React, { useEffect, useState } from "react";
+import { Link, Navigate } from "react-router-dom";
+import { FaMinus, FaPlus, FaTrash } from "react-icons/fa6";
+import api, { apiError } from "../api";
 
-const Cart = () => {
-  return (
-    <div>
-      Cart
-    </div>
-  )
+export default function Cart() {
+  const [cart, setCart] = useState(null); const [error, setError] = useState(""); const [busy, setBusy] = useState("");
+  const load = async () => { try { const { data } = await api.get("/cart"); setCart(data); } catch (err) { setError(apiError(err)); } };
+  useEffect(() => { load(); }, []);
+  if (!localStorage.getItem("harmain_token")) return <Navigate to="/login" replace />;
+  const update = async (id, quantity) => { setBusy(id); try { await api.patch(`/cart/${id}`, { quantity }); await load(); } catch (err) { setError(apiError(err)); } finally { setBusy(""); } };
+  const remove = async (id) => { setBusy(id); try { await api.delete(`/cart/${id}`); await load(); } catch (err) { setError(apiError(err)); } finally { setBusy(""); } };
+  const items = cart?.items || []; const total = items.reduce((sum, item) => sum + (item.product?.price || 0) * item.quantity, 0);
+  return <main className="min-h-[calc(100vh-160px)] bg-red-50 px-4 py-10"><div className="mx-auto max-w-5xl"><p className="text-xs font-bold uppercase tracking-widest text-red-700">Your order</p><h1 className="mt-2 text-3xl font-bold text-gray-900">Shopping cart</h1>{error && <p className="mt-5 rounded-lg bg-red-100 p-3 text-sm text-red-700">{error}</p>}{!cart ? <p className="mt-8 text-gray-500">Loading your cart...</p> : !items.length ? <section className="mt-8 rounded-2xl bg-white p-10 text-center shadow-sm"><h2 className="text-xl font-bold text-gray-800">Your cart is empty</h2><Link to="/" className="mt-4 inline-block rounded-lg bg-red-700 px-5 py-3 text-sm font-bold text-white">Browse menu</Link></section> : <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_310px]"><section className="overflow-hidden rounded-2xl bg-white shadow-sm">{items.map(({ product, quantity }) => product && <article key={product._id} className="flex gap-4 border-b p-4 last:border-0"><div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-red-50">{product.image && <img src={product.image} alt={product.name} className="h-full w-full object-cover" />}</div><div className="flex-1"><h2 className="font-bold text-gray-900">{product.name}</h2><p className="mt-1 text-sm font-semibold text-red-700">Rs {product.price}</p><div className="mt-3 flex items-center justify-between"><div className="flex items-center rounded-lg border border-red-100"><button disabled={busy===product._id} onClick={() => quantity === 1 ? remove(product._id) : update(product._id, quantity - 1)} className="p-2 text-red-700"><FaMinus /></button><b className="w-8 text-center">{quantity}</b><button disabled={busy===product._id} onClick={() => update(product._id, quantity + 1)} className="p-2 text-red-700"><FaPlus /></button></div><button disabled={busy===product._id} onClick={() => remove(product._id)} className="flex items-center gap-2 text-sm font-bold text-red-700"><FaTrash /> Remove</button></div></div></article>)}</section><aside className="h-fit rounded-2xl bg-white p-6 shadow-sm"><h2 className="text-xl font-bold text-gray-900">Order summary</h2><div className="mt-5 flex justify-between border-t pt-4 font-bold"><span>Total</span><span>Rs {total}</span></div><button className="mt-6 w-full rounded-lg bg-red-700 py-3 text-sm font-bold text-white">Continue to checkout</button></aside></div>}</div></main>;
 }
-
-export default Cart

@@ -15,6 +15,7 @@ import { RiShoppingBag3Fill } from "react-icons/ri";
 import { IoMdClose, IoMdSearch } from "react-icons/io";
 import { FiMessageSquare, FiUser } from "react-icons/fi";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import CartDrawer from "./CartDrawer";
 
 const Navbar = () => {
   const [orderSelection, setOrderSelection] = useState(false);
@@ -336,8 +337,9 @@ const Navbar = () => {
                 <IoMdClose className="w-5 h-5 text-gray-100" />
               </button>
             </div>
+            <CartDrawer onClose={() => setCartModel(false)} />
 
-            <div className="absolute flex flex-col items-center gap-1 px-10 text-center bottom-1/4">
+            <div className="hidden absolute flex flex-col items-center gap-1 px-10 text-center bottom-1/4">
               <span className="inline-flex items-center justify-center p-3 bg-gray-100 rounded-full">
                 <span className="inline-flex items-center justify-center p-3 bg-white rounded-full shadow-sm">
                   <RiShoppingBag3Fill className="w-8 h-8 text-red-700" />
