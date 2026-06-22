@@ -13,8 +13,8 @@ import { useEffect, useState } from "react";
 import { areas, Branch } from "../Data/data";
 import { RiShoppingBag3Fill } from "react-icons/ri";
 import { IoMdClose, IoMdSearch } from "react-icons/io";
-import { FiMessageSquare } from "react-icons/fi";
-import { Link, useLocation } from "react-router-dom";
+import { FiMessageSquare, FiUser } from "react-icons/fi";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
 const Navbar = () => {
   const [orderSelection, setOrderSelection] = useState(false);
@@ -27,6 +27,16 @@ const Navbar = () => {
   const [showButtons, setShowButtons] = useState(false);
 
   const location = useLocation();
+  const navigate = useNavigate();
+  const [user, setUser] = useState(() => JSON.parse(localStorage.getItem("harmain_user") || "null"));
+
+  useEffect(() => {
+    try {
+      setUser(JSON.parse(localStorage.getItem("harmain_user") || "null"));
+    } catch {
+      setUser(null);
+    }
+  }, [location.pathname]);
 
   const orderAmount = 900;
 
@@ -69,6 +79,7 @@ const Navbar = () => {
     setMenuBarVisible(false);
     setTimeout(() => setMenuBar(false), 300);
   };
+  const handleLogout = () => { localStorage.removeItem("harmain_token"); localStorage.removeItem("harmain_user"); setUser(null); handleCloseMenu(); navigate("/"); };
 
   useEffect(() => {
     if (orderSelection || cartModel || menuBar) {
@@ -418,6 +429,9 @@ const Navbar = () => {
                 </button>
               </Link>
               <div className="my-2 border-t"></div>
+              <div className="border-b border-gray-200 pb-4">
+                {user ? <div className="space-y-3"><div className="flex items-center gap-3 rounded-xl bg-red-50 p-3"><span className="flex h-10 w-10 items-center justify-center rounded-full bg-red-700 font-bold text-white">{user.name?.[0]?.toUpperCase() || "U"}</span><div><p className="text-sm font-bold text-gray-800">{user.name}</p><p className="text-xs text-gray-500">{user.email}</p></div></div><button onClick={handleLogout} className="w-full rounded-xl border border-red-200 py-3 text-sm font-bold text-red-700 hover:bg-red-50">Logout</button></div> : <div><Link to="/login" onClick={handleCloseMenu} className="flex items-center gap-3 rounded-xl bg-red-700 p-3 text-white"><FiUser /><span className="text-sm font-bold">Sign in</span></Link><Link to="/register" onClick={handleCloseMenu} className="mt-3 block text-center text-xs font-bold text-red-700">Create an account</Link></div>}
+              </div>
 
               <div className="flex flex-col gap-2 px-2">
                 <span className="text-xs font-semibold tracking-wide text-gray-400 uppercase">
