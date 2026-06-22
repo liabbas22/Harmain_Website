@@ -29,7 +29,7 @@ export default function CartDrawer({ onClose }) {
     return () => window.removeEventListener("harmain-cart-updated", refresh);
   }, []);
   const change = async (id, quantity, optionName = "") => {
-    if (quantity < 1) return remove(id);
+    if (quantity < 1) return remove(id, optionName);
     await api.patch(`/cart/${id}`, { quantity, optionName });
     await load();
     window.dispatchEvent(new Event("harmain-cart-updated"));
@@ -39,14 +39,14 @@ export default function CartDrawer({ onClose }) {
     await load();
     window.dispatchEvent(new Event("harmain-cart-updated"));
   };
-  const add = async (id, optionName = "") => {
+  const add = async (id) => {
     await api.post("/cart", { productId: id, quantity: 1 });
     await load();
     window.dispatchEvent(new Event("harmain-cart-updated"));
   };
   const items = cart?.items || [];
   const subtotal = items.reduce(
-    (sum, item) => sum + (item.product?.price || 0) * item.quantity,
+    (sum, item) => sum + (item.unitPrice ?? item.product?.price ?? 0) * item.quantity,
     0,
   );
   const discount = 0;
@@ -71,9 +71,9 @@ export default function CartDrawer({ onClose }) {
           </div>
         </div>
         {!cart ? (
-          <p className="py-12 text-sm text-center text-gray-500">
-            Loading your cart...
-          </p>
+          <div className="flex justify-center py-12" aria-label="Loading cart">
+            <span className="h-8 w-8 animate-spin rounded-full border-4 border-red-100 border-t-red-700" />
+          </div>
         ) : !items.length ? (
           <div className="p-8 text-center bg-white border border-red-200 border-dashed rounded-2xl">
             <p className="font-bold text-gray-800">Your cart is empty</p>
@@ -87,7 +87,7 @@ export default function CartDrawer({ onClose }) {
               ({ product, quantity, unitPrice, optionName }) =>
                 product && (
                   <article
-                    key={product._id}
+                    key={`${product._id}-${optionName || "regular"}`}
                     className="flex gap-3 p-3 bg-white border border-red-100 shadow-sm rounded-2xl"
                   >
                     <div className="w-16 h-16 overflow-hidden shrink-0 rounded-xl bg-red-50">
@@ -105,6 +105,11 @@ export default function CartDrawer({ onClose }) {
                           <h3 className="text-sm font-extrabold text-gray-900 truncate">
                             {product.name}
                           </h3>
+                          {optionName && (
+                            <p className="mt-0.5 text-xs font-medium text-gray-500">
+                              {optionName}
+                            </p>
+                          )}
                           <p className="mt-1 text-sm font-bold text-red-700">
                             Rs. {unitPrice ?? product.price}
                           </p>
@@ -230,5 +235,3 @@ export default function CartDrawer({ onClose }) {
     </div>
   );
 }
-
-
