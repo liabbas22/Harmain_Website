@@ -351,7 +351,7 @@ const Navbar = () => {
             </div>
             <CartDrawer onClose={() => setCartModel(false)} />
 
-            <div className="hidden absolute flex flex-col items-center gap-1 px-10 text-center bottom-1/4">
+            <div className="absolute flex-col items-center hidden gap-1 px-10 text-center bottom-1/4">
               <span className="inline-flex items-center justify-center p-3 bg-gray-100 rounded-full">
                 <span className="inline-flex items-center justify-center p-3 bg-white rounded-full shadow-sm">
                   <RiShoppingBag3Fill className="w-8 h-8 text-red-700" />
