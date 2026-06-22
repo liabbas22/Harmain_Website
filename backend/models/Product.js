@@ -50,6 +50,15 @@ const productSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    options: {
+      type: [{
+        name: { type: String, required: true, trim: true },
+        actualPrice: { type: Number, required: true, min: 0 },
+        discountPrice: { type: Number, min: 0 },
+        tag: { type: String, default: "", trim: true },
+      }],
+      default: [],
+    },
   },
   { timestamps: true }
 );

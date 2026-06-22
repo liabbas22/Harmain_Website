@@ -9,7 +9,7 @@ export const checkout = asyncHandler(async (req, res) => {
   if (!deliveryAddress?.fullName || !deliveryAddress?.phone || !deliveryAddress?.line1 || !deliveryAddress?.city) return res.status(400).json({ message: "Complete delivery address is required" });
   const cart = await Cart.findOne({ user: req.user._id }).populate("items.product"); if (!cart?.items.length) return res.status(400).json({ message: "Your cart is empty" });
   if (cart.items.some(({ product, quantity }) => !product || !product.isAvailable || (product.stock > 0 && quantity > product.stock))) return res.status(400).json({ message: "One or more items are unavailable or out of stock" });
-  const items = cart.items.map(({ product, quantity }) => ({ product: product._id, name: product.name, image: product.image, price: product.price, quantity })); const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0); const deliveryFee = Number(process.env.DELIVERY_FEE || 0);
+  const items = cart.items.map(({ product, quantity, optionName, unitPrice }) => ({ product: product._id, name: product.name, optionName, image: product.image, price: unitPrice ?? product.price, quantity })); const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0); const deliveryFee = Number(process.env.DELIVERY_FEE || 0);
   const order = await Order.create({ user: req.user._id, items, deliveryAddress, paymentMethod, subtotal, deliveryFee, total: subtotal + deliveryFee });
   await Promise.all(items.map((item) => Product.updateOne({ _id: item.product, stock: { $gt: 0 } }, { $inc: { stock: -item.quantity } }))); cart.items = []; await cart.save(); res.status(201).json(order);
 });

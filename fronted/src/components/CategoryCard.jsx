@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import ModalDetailsPage from "./ModalDetailsPage";
 import api from "../api";
 
@@ -24,11 +24,11 @@ const CategoryCard = ({ item }) => {
       setModelVisible(false);
     }, 300);
   };
-  const addToCart = async (event, quantity = 1) => {
+  const addToCart = async (event, quantity = 1, selectedOption = item?.options?.[0]) => {
     event?.stopPropagation();
     if (!localStorage.getItem("harmain_token")) return window.location.assign("/login");
     try {
-      await api.post("/cart", { productId: item.id, quantity });
+      await api.post("/cart", { productId: item.id, quantity, optionName: selectedOption?.name || "" });
       window.dispatchEvent(new Event("harmain-cart-updated"));
       handleCloseModal();
       setToast(true);
@@ -122,7 +122,7 @@ const CategoryCard = ({ item }) => {
           handleCloseModal={handleCloseModal}
           selectedOption={selectedOption}
           setSelectedOption={setSelectedOption}
-          onAddToCart={() => addToCart(null, quantity)}
+          onAddToCart={() => addToCart(null, quantity, selectedOption)}
         />
       )}
     </>
@@ -130,3 +130,4 @@ const CategoryCard = ({ item }) => {
 };
 
 export default CategoryCard;
+
