@@ -7,6 +7,7 @@ const CategoryCard = ({ item }) => {
   const [modalAnimation, setModalAnimation] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [selectedOption, setSelectedOption] = useState(item?.options?.[0]);
+  const [toast, setToast] = useState(false);
 
   const handleOpenModal = () => {
     setModelVisible(true);
@@ -23,10 +24,16 @@ const CategoryCard = ({ item }) => {
       setModelVisible(false);
     }, 300);
   };
-  const addToCart = async (event) => {
-    event.stopPropagation();
+  const addToCart = async (event, quantity = 1) => {
+    event?.stopPropagation();
     if (!localStorage.getItem("harmain_token")) return window.location.assign("/login");
-    try { await api.post("/cart", { productId: item.id, quantity: 1 }); window.dispatchEvent(new Event("harmain-cart-updated")); } catch (error) { alert(error.response?.data?.message || "Could not add item to cart"); }
+    try {
+      await api.post("/cart", { productId: item.id, quantity });
+      window.dispatchEvent(new Event("harmain-cart-updated"));
+      handleCloseModal();
+      setToast(true);
+      window.setTimeout(() => setToast(false), 2600);
+    } catch (error) { alert(error.response?.data?.message || "Could not add item to cart"); }
   };
 
   useEffect(() => {
@@ -43,6 +50,7 @@ const CategoryCard = ({ item }) => {
 
   return (
     <>
+      {toast && <div className="fixed top-5 left-1/2 z-[70] flex -translate-x-1/2 items-center gap-2 rounded-xl bg-green-700 px-4 py-3 text-sm font-bold text-white shadow-xl"><span className="grid h-5 w-5 place-items-center rounded-full bg-white text-xs text-green-700">OK</span>{item?.title} added to cart successfully</div>}
       <div
         className="flex items-center gap-4 p-3 transition-all duration-500 ease-in-out shadow-sm cursor-pointer
       bg-gray-50 rounded-2xl hover:shadow-md group hover:scale-[1.02] hover:bg-red-100"
@@ -114,6 +122,7 @@ const CategoryCard = ({ item }) => {
           handleCloseModal={handleCloseModal}
           selectedOption={selectedOption}
           setSelectedOption={setSelectedOption}
+          onAddToCart={() => addToCart(null, quantity)}
         />
       )}
     </>

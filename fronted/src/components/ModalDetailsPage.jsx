@@ -11,6 +11,7 @@ const ModalDetailsPage = ({
   setSelectedOption,
   quantity,
   setQuantity,
+  onAddToCart,
 }) => {
   return (
     <div
@@ -196,7 +197,7 @@ const ModalDetailsPage = ({
                 </button>
               </div>
 
-              <button className="flex items-center justify-center gap-2 px-3 py-3 text-sm font-bold text-white transition-all duration-300 bg-red-700 rounded-lg shadow-lg group md:px-10 hover:bg-red-600 whitespace-nowrap w-fit">
+              <button onClick={onAddToCart} className="flex items-center justify-center gap-2 px-3 py-3 text-sm font-bold text-white transition-all duration-300 bg-red-700 rounded-lg shadow-lg group md:px-10 hover:bg-red-600 whitespace-nowrap w-fit">
                 <span>
                   Rs.{" "}
                   {(selectedOption?.discountPrice ||

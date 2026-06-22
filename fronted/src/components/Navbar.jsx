@@ -16,6 +16,7 @@ import { IoMdClose, IoMdSearch } from "react-icons/io";
 import { FiMessageSquare, FiUser } from "react-icons/fi";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import CartDrawer from "./CartDrawer";
+import api from "../api";
 
 const Navbar = () => {
   const [orderSelection, setOrderSelection] = useState(false);
@@ -30,6 +31,7 @@ const Navbar = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [user, setUser] = useState(() => JSON.parse(localStorage.getItem("harmain_user") || "null"));
+  const [cartCount, setCartCount] = useState(0);
 
   useEffect(() => {
     try {
@@ -37,6 +39,16 @@ const Navbar = () => {
     } catch {
       setUser(null);
     }
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const loadCartCount = async () => {
+      if (!localStorage.getItem("harmain_token")) return setCartCount(0);
+      try { const { data } = await api.get("/cart"); setCartCount((data.items || []).reduce((sum, item) => sum + item.quantity, 0)); } catch { setCartCount(0); }
+    };
+    loadCartCount();
+    window.addEventListener("harmain-cart-updated", loadCartCount);
+    return () => window.removeEventListener("harmain-cart-updated", loadCartCount);
   }, [location.pathname]);
 
   const orderAmount = 900;
@@ -155,7 +167,7 @@ const Navbar = () => {
           >
             <BsCartFill />
             <span className="absolute top-[2px] right-[2px] w-4 h-4 text-[9px] bg-red-700 text-white rounded-full flex items-center justify-center border border-white">
-              0
+              {cartCount}
             </span>
           </button>
 
@@ -431,8 +443,8 @@ const Navbar = () => {
                 </button>
               </Link>
               <div className="my-2 border-t"></div>
-              <div className="border-b border-gray-200 pb-4">
-                {user ? <div className="space-y-3"><div className="flex items-center gap-3 rounded-xl bg-red-50 p-3"><span className="flex h-10 w-10 items-center justify-center rounded-full bg-red-700 font-bold text-white">{user.name?.[0]?.toUpperCase() || "U"}</span><div><p className="text-sm font-bold text-gray-800">{user.name}</p><p className="text-xs text-gray-500">{user.email}</p></div></div><button onClick={handleLogout} className="w-full rounded-xl border border-red-200 py-3 text-sm font-bold text-red-700 hover:bg-red-50">Logout</button></div> : <div><Link to="/login" onClick={handleCloseMenu} className="flex items-center gap-3 rounded-xl bg-red-700 p-3 text-white"><FiUser /><span className="text-sm font-bold">Sign in</span></Link><Link to="/register" onClick={handleCloseMenu} className="mt-3 block text-center text-xs font-bold text-red-700">Create an account</Link></div>}
+              <div className="pb-4 border-b border-gray-200">
+                {user ? <div className="space-y-3"><div className="flex items-center gap-3 p-3 rounded-xl bg-red-50"><span className="flex items-center justify-center w-10 h-10 font-bold text-white bg-red-700 rounded-full">{user.name?.[0]?.toUpperCase() || "U"}</span><div><p className="text-sm font-bold text-gray-800">{user.name}</p><p className="text-xs text-gray-500">{user.email}</p></div></div><button onClick={handleLogout} className="w-full py-3 text-sm font-bold text-red-700 border border-red-200 rounded-xl hover:bg-red-50">Logout</button></div> : <div><Link to="/login" onClick={handleCloseMenu} className="flex items-center gap-3 p-3 text-white bg-red-700 rounded-xl"><FiUser /><span className="text-sm font-bold">Sign in</span></Link><Link to="/register" onClick={handleCloseMenu} className="block mt-3 text-xs font-bold text-center text-red-700">Create an account</Link></div>}
               </div>
 
               <div className="flex flex-col gap-2 px-2">
