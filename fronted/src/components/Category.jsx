@@ -30,6 +30,13 @@ const Category = ({ categories = staticCategories }) => {
 
   }, [showStickyCategory]);
 
+  const scrollToCategory = (categoryId) => {
+    document.getElementById(`category-${categoryId}`)?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  };
+
   return (
     <>
       <div
@@ -63,6 +70,7 @@ const Category = ({ categories = staticCategories }) => {
 
                   <div
                     className="flex flex-col items-center justify-center p-2 transition-all duration-300 bg-white border border-red-100 cursor-pointer rounded-xl hover:bg-red-700 group"
+                    onClick={() => scrollToCategory(cat.id)}
                   >
 
                     <Icon className="text-xl text-red-600 transition-all duration-300 md:text-2xl group-hover:text-white group-hover:scale-110" />
@@ -123,8 +131,9 @@ const Category = ({ categories = staticCategories }) => {
             return (
               <SwiperSlide key={cat.id}>
 
-                <div
-                  className="flex flex-col items-center justify-center p-3 transition-all duration-300 bg-white shadow-sm cursor-pointer rounded-xl hover:shadow-lg group hover:bg-red-700 active:scale-95"
+                  <div
+                    className="flex flex-col items-center justify-center p-3 transition-all duration-300 bg-white shadow-sm cursor-pointer rounded-xl hover:shadow-lg group hover:bg-red-700 active:scale-95"
+                    onClick={() => scrollToCategory(cat.id)}
                 >
 
                   <Icon className="text-2xl text-red-600 transition-all duration-300 lg:w-10 lg:h-10 md:text-3xl group-hover:text-white group-hover:scale-110" />

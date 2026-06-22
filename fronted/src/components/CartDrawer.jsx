@@ -9,6 +9,8 @@ import {
 } from "react-icons/fa6";
 import api from "../api";
 
+const MINIMUM_ORDER = 500;
+
 export default function CartDrawer({ onClose }) {
   const navigate = useNavigate();
   const [cart, setCart] = useState(null);
@@ -50,6 +52,7 @@ export default function CartDrawer({ onClose }) {
     0,
   );
   const discount = 0;
+  const canCheckout = subtotal >= MINIMUM_ORDER;
   const recommendations = products.filter(
     (product) => !items.some((item) => item.product?._id === product._id),
   );
@@ -223,11 +226,13 @@ export default function CartDrawer({ onClose }) {
           )}
         </div>
         <button
+          disabled={!canCheckout}
+          title={!canCheckout ? `Minimum order is Rs. ${MINIMUM_ORDER}` : "Checkout"}
           onClick={() => {
             onClose?.();
             navigate("/checkout");
           }}
-          className="w-full py-3 mt-4 text-sm font-extrabold text-white transition bg-red-700 shadow-lg rounded-xl shadow-red-700/20 hover:bg-red-800"
+          className="w-full py-3 mt-4 text-sm font-extrabold text-white transition bg-red-700 shadow-lg rounded-xl shadow-red-700/20 hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-60"
         >
           Checkout
         </button>

@@ -52,6 +52,7 @@ const CategoryCard = ({ item }) => {
     <>
       {toast && <div className="fixed top-5 left-1/2 z-[70] flex -translate-x-1/2 items-center gap-2 rounded-xl bg-green-700 px-4 py-3 text-sm font-bold text-white shadow-xl"><span className="grid h-5 w-5 place-items-center rounded-full bg-white text-xs text-green-700">OK</span>{item?.title} added to cart successfully</div>}
       <div
+        id={`product-${item?.id}`}
         className="flex items-center gap-4 p-3 transition-all duration-500 ease-in-out shadow-sm cursor-pointer
       bg-gray-50 rounded-2xl hover:shadow-md group hover:scale-[1.02] hover:bg-red-100"
         onClick={handleOpenModal}

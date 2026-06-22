@@ -18,6 +18,8 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import CartDrawer from "./CartDrawer";
 import api from "../api";
 
+const MINIMUM_ORDER = 500;
+
 const Navbar = () => {
   const [orderSelection, setOrderSelection] = useState(false);
   const [deliveryButton, setDeliveryButton] = useState(true);
@@ -32,6 +34,7 @@ const Navbar = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState(() => JSON.parse(localStorage.getItem("harmain_user") || "null"));
   const [cartCount, setCartCount] = useState(0);
+  const [cartTotal, setCartTotal] = useState(0);
 
   useEffect(() => {
     try {
@@ -43,15 +46,27 @@ const Navbar = () => {
 
   useEffect(() => {
     const loadCartCount = async () => {
-      if (!localStorage.getItem("harmain_token")) return setCartCount(0);
-      try { const { data } = await api.get("/cart"); setCartCount((data.items || []).reduce((sum, item) => sum + item.quantity, 0)); } catch { setCartCount(0); }
+      if (!localStorage.getItem("harmain_token")) {
+        setCartCount(0);
+        setCartTotal(0);
+        return;
+      }
+      try {
+        const { data } = await api.get("/cart");
+        const items = data.items || [];
+        setCartCount(items.reduce((sum, item) => sum + item.quantity, 0));
+        setCartTotal(items.reduce((sum, item) => sum + (item.unitPrice ?? item.product?.price ?? 0) * item.quantity, 0));
+      } catch {
+        setCartCount(0);
+        setCartTotal(0);
+      }
     };
     loadCartCount();
     window.addEventListener("harmain-cart-updated", loadCartCount);
     return () => window.removeEventListener("harmain-cart-updated", loadCartCount);
   }, [location.pathname]);
 
-  const orderAmount = 900;
+  const amountUntilMinimum = Math.max(0, MINIMUM_ORDER - cartTotal);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -522,19 +537,19 @@ const Navbar = () => {
               : "translate-y-10 opacity-0"
           }`}
         >
-          {orderAmount < 1000 && (
+          {cartTotal < MINIMUM_ORDER && (
             <div className="px-0 md:px-7 py-[4px] font-sans rounded-full text-sm bg-transparent md:bg-gray-50/80 md:shadow-lg">
               <span className="font-semibold text-orange-400">
                 You're{" "}
-                <span className="font-extrabold text-red-700">Rs. 100</span>{" "}
+                <span className="font-extrabold text-red-700">Rs. {amountUntilMinimum}</span>{" "}
                 away from minimum order
               </span>
             </div>
           )}
 
-          <div className="flex items-center w-full gap-4 px-3 py-[10px] transition-all bg-red-700 rounded-lg shadow-lg cursor-pointer md:px-6 md:w-fit md:py-4 md:gap-8 md:rounded-3xl hover:scale-105 group">
+          <div onClick={handleCart} className="flex items-center w-full gap-4 px-3 py-[10px] transition-all bg-red-700 rounded-lg shadow-lg cursor-pointer md:px-6 md:w-fit md:py-4 md:gap-8 md:rounded-3xl hover:scale-105 group">
             <span className="px-2 font-bold text-red-700 bg-white rounded-full md:font-extrabold text-[16px]">
-              1
+              {cartCount}
             </span>
 
             <span className="text-[16px] tracking-wider font-bold md:font-extrabold text-gray-200 md:text-lg">
@@ -542,7 +557,7 @@ const Navbar = () => {
             </span>
 
             <span className="flex items-center text-[16px] font-extrabold text-gray-50">
-              Rs.900
+              Rs. {cartTotal}
               <span className="px-4 font-extrabold text-gray-100 transition-all duration-300 ease-in-out md:text-lg group-hover:translate-x-5">
                 <FaArrowRight />
               </span>

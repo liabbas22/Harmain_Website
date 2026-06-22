@@ -6,7 +6,7 @@ const CategoryData = ({ categories = staticCategoriesData }) => {
   return (
     <div className="py-0 space-y-10 md:py-4 lg:py-8 ">
       {categories?.map((category) => (
-        <div key={category.id}>
+        <div id={`category-${category.id}`} key={category.id} className="scroll-mt-24">
           <div className="relative">
             <img
               src={category?.image}

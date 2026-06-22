@@ -4,12 +4,13 @@ import Product from "../models/Product.js";
 import asyncHandler from "../utils/asyncHandler.js";
 
 const statuses = ["placed", "confirmed", "preparing", "out_for_delivery", "delivered", "cancelled"];
+const MINIMUM_ORDER_AMOUNT = 500;
 export const checkout = asyncHandler(async (req, res) => {
   const { deliveryAddress, paymentMethod = "cash_on_delivery" } = req.body;
   if (!deliveryAddress?.fullName || !deliveryAddress?.phone || !deliveryAddress?.line1 || !deliveryAddress?.city) return res.status(400).json({ message: "Complete delivery address is required" });
   const cart = await Cart.findOne({ user: req.user._id }).populate("items.product"); if (!cart?.items.length) return res.status(400).json({ message: "Your cart is empty" });
   if (cart.items.some(({ product, quantity }) => !product || !product.isAvailable || (product.stock > 0 && quantity > product.stock))) return res.status(400).json({ message: "One or more items are unavailable or out of stock" });
-  const items = cart.items.map(({ product, quantity, optionName, unitPrice }) => ({ product: product._id, name: product.name, optionName, image: product.image, price: unitPrice ?? product.price, quantity })); const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0); const deliveryFee = Number(process.env.DELIVERY_FEE || 0);
+  const items = cart.items.map(({ product, quantity, optionName, unitPrice }) => ({ product: product._id, name: product.name, optionName, image: product.image, price: unitPrice ?? product.price, quantity })); const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0); if (subtotal < MINIMUM_ORDER_AMOUNT) return res.status(400).json({ message: `Minimum order amount is Rs. ${MINIMUM_ORDER_AMOUNT}` }); const deliveryFee = Number(process.env.DELIVERY_FEE || 0);
   const order = await Order.create({ user: req.user._id, items, deliveryAddress, paymentMethod, subtotal, deliveryFee, total: subtotal + deliveryFee });
   await Promise.all(items.map((item) => Product.updateOne({ _id: item.product, stock: { $gt: 0 } }, { $inc: { stock: -item.quantity } }))); cart.items = []; await cart.save(); res.status(201).json(order);
 });
