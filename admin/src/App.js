@@ -1408,7 +1408,7 @@ function OrderDetailsModal({ order, onClose }) {
             <h2>{shortId(order._id)}</h2>
           </div>
           <button
-            className="bg-red-700 close-button"
+            className="close-button"
             type="button"
             onClick={onClose}
             aria-label="Close"
