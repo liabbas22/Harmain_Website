@@ -75,7 +75,7 @@ export default function CartDrawer({ onClose }) {
         </div>
         {!cart ? (
           <div className="flex justify-center py-12" aria-label="Loading cart">
-            <span className="h-8 w-8 animate-spin rounded-full border-4 border-red-100 border-t-red-700" />
+            <span className="w-8 h-8 border-4 border-red-100 rounded-full animate-spin border-t-red-700" />
           </div>
         ) : !items.length ? (
           <div className="p-8 text-center bg-white border border-red-200 border-dashed rounded-2xl">
@@ -86,7 +86,7 @@ export default function CartDrawer({ onClose }) {
           </div>
         ) : (
           <div className="space-y-3">
-            {items.map(
+            {items?.map(
               ({ product, quantity, unitPrice, optionName }) =>
                 product && (
                   <article
@@ -96,7 +96,7 @@ export default function CartDrawer({ onClose }) {
                     <div className="w-16 h-16 overflow-hidden shrink-0 rounded-xl bg-red-50">
                       {product.image && (
                         <img
-                          src={product.image}
+                          src={product?.image}
                           alt={product.name}
                           className="object-cover w-full h-full"
                         />

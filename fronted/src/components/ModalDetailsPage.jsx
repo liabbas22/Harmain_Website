@@ -13,6 +13,7 @@ const ModalDetailsPage = ({
   setQuantity,
   onAddToCart,
 }) => {
+  const isAvailable = item?.isAvailable !== false;
   return (
     <div
       className={`fixed inset-0 z-50 flex items-center justify-center p-3 transition-all duration-300 ${
@@ -87,6 +88,8 @@ const ModalDetailsPage = ({
                     </span>
                   )}
               </div>
+
+              {!isAvailable && <span className="rounded-md bg-red-700 px-2 py-1 text-xs font-extrabold uppercase tracking-wide text-white">Unavailable</span>}
 
               <div className="items-center hidden gap-3 lg:flex">
                 <button className="flex items-center justify-center w-12 h-12 text-white transition-all bg-red-700 rounded-full shadow-lg hover:bg-red-600">
@@ -197,7 +200,7 @@ const ModalDetailsPage = ({
                 </button>
               </div>
 
-              <button onClick={onAddToCart} className="flex items-center justify-center gap-2 px-3 py-3 text-sm font-bold text-white transition-all duration-300 bg-red-700 rounded-lg shadow-lg group md:px-10 hover:bg-red-600 whitespace-nowrap w-fit">
+              <button disabled={!isAvailable} onClick={() => isAvailable && onAddToCart?.()} className="flex items-center justify-center gap-2 px-3 py-3 text-sm font-bold text-white transition-all duration-300 bg-red-700 rounded-lg shadow-lg group md:px-10 hover:bg-red-600 whitespace-nowrap w-fit disabled:cursor-not-allowed disabled:bg-gray-400 disabled:hover:bg-gray-400 disabled:shadow-none">
                 <span>
                   Rs.{" "}
                   {(selectedOption?.discountPrice ||
@@ -207,12 +210,7 @@ const ModalDetailsPage = ({
 
                 <span className="opacity-50">|</span>
 
-                <span className="flex items-center gap-3">
-                  Add to Cart
-                  <span className="transition-all duration-200 group-hover:translate-x-1">
-                    <IoMdArrowRoundForward className="w-4 h-4" />
-                  </span>
-                </span>
+                <span className="flex items-center gap-3">{isAvailable ? <>Add to Cart<span className="transition-all duration-200 group-hover:translate-x-1"><IoMdArrowRoundForward className="w-4 h-4" /></span></> : "Unavailable"}</span>
               </button>
             </div>
           </div>
