@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { adminApi } from "../api/adminApi";
 
 export function useAdminWorkspace(token, onUnauthorized) {
@@ -7,6 +7,7 @@ export function useAdminWorkspace(token, onUnauthorized) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const overviewRefreshingRef = useRef(false);
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -35,6 +36,25 @@ export function useAdminWorkspace(token, onUnauthorized) {
     load();
   }, [load]);
 
+  const refreshOverview = useCallback(async () => {
+    if (!token || overviewRefreshingRef.current) return;
+    overviewRefreshingRef.current = true;
+
+    try {
+      const [productResult, orderResult] = await Promise.all([
+        adminApi.getProducts(token),
+        adminApi.getOrders(token),
+      ]);
+      setProducts(productResult.products || []);
+      setOrders(orderResult.orders || []);
+    } catch (requestError) {
+      if (requestError.status === 401 || requestError.status === 403) onUnauthorized();
+      else setError(requestError.message || "Could not refresh overview data.");
+    } finally {
+      overviewRefreshingRef.current = false;
+    }
+  }, [onUnauthorized, token]);
+
   return {
     products,
     categories,
@@ -45,5 +65,6 @@ export function useAdminWorkspace(token, onUnauthorized) {
     loading,
     error,
     load,
+    refreshOverview,
   };
 }

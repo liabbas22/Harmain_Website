@@ -81,7 +81,7 @@ function App() {
   }, []);
 
   const workspace = useAdminWorkspace(session?.token, logout);
-  const { products, categories, orders, setOrders, loading, error, load } = workspace;
+  const { products, categories, orders, setOrders, loading, error, load, refreshOverview } = workspace;
 
   const notify = useCallback((message, type = "success") => setToast({ message, type, id: Date.now() }), []);
 
@@ -90,6 +90,22 @@ function App() {
     const timer = window.setTimeout(() => setToast(null), 3500);
     return () => window.clearTimeout(timer);
   }, [toast]);
+
+  useEffect(() => {
+    if (view !== "overview" || orderDetails) return undefined;
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") refreshOverview();
+    };
+
+    const interval = window.setInterval(refreshWhenVisible, 60000);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [orderDetails, refreshOverview, view]);
 
   const metrics = useMemo(() => ({
     revenue: orders.filter((order) => order.orderStatus !== "cancelled").reduce((sum, order) => sum + Number(order.total || 0), 0),
