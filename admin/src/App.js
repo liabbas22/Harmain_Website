@@ -36,24 +36,28 @@ const toProductEditor = (product) => ({
   },
 });
 
-const createProductPayload = (values) => ({
-  name: values.name.trim(),
-  description: values.description.trim(),
-  image: values.image.trim(),
-  category: values.category,
-  price: Number(values.price),
-  stock: Number(values.stock || 0),
-  tags: values.tags.split(",").map((tag) => tag.trim()).filter(Boolean),
-  isAvailable: values.isAvailable,
-  options: values.options
+const createProductPayload = (values) => {
+  const options = values.options
     .filter((option) => option.name.trim() && option.actualPrice !== "")
     .map((option) => ({
       name: option.name.trim(),
       actualPrice: Number(option.actualPrice),
       ...(option.discountPrice !== "" ? { discountPrice: Number(option.discountPrice) } : {}),
       tag: option.tag.trim(),
-    })),
-});
+    }));
+  const firstOption = options[0];
+  return {
+    name: values.name.trim(),
+    description: values.description.trim(),
+    image: values.image.trim(),
+    category: values.category,
+    price: firstOption?.discountPrice ?? firstOption?.actualPrice ?? Number(values.price || 0),
+    stock: Number(values.stock || 0),
+    tags: values.tags.split(",").map((tag) => tag.trim()).filter(Boolean),
+    isAvailable: values.isAvailable,
+    options,
+  };
+};
 
 function App() {
   const [session, setSession] = useState(readAdminSession);
@@ -102,9 +106,14 @@ function App() {
   const saveProduct = async (event) => {
     event.preventDefault();
     const editor = productEditor;
+    const payload = createProductPayload(editor.values);
+    if (!editor.id && (!payload.options.length || payload.price <= 0)) {
+      notify("Add at least one size option with a valid price.", "error");
+      return;
+    }
     setBusyAction("product-save");
     try {
-      await adminApi.saveProduct(editor.id, createProductPayload(editor.values), session.token);
+      await adminApi.saveProduct(editor.id, payload, session.token);
       setProductEditor(null);
       notify(editor.id ? "Product updated." : "Product added to menu.");
       await load();

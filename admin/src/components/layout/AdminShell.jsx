@@ -35,6 +35,18 @@ export default function AdminShell({
             </button>
           ))}
         </nav>
+        <div className="mt-3 flex items-center justify-between border-t border-slate-700 px-2 pt-3 lg:hidden">
+          <span className="truncate pr-3 text-xs font-bold text-slate-300">
+            {session.user?.name || "Administrator"}
+          </span>
+          <Button
+            variant="danger"
+            className="min-h-8 shrink-0 px-3 text-xs"
+            onClick={onLogout}
+          >
+            Sign out
+          </Button>
+        </div>
         <div className="mt-auto hidden border-t border-slate-700 px-2 pt-5 lg:grid lg:grid-cols-[34px_1fr] lg:gap-3">
           <span className="grid text-xs font-extrabold text-white rounded-full h-9 w-9 place-items-center bg-brand-600">
             {session.user?.name?.slice(0, 1).toUpperCase() || "A"}
