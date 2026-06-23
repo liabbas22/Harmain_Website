@@ -19,4 +19,11 @@ export const login = asyncHandler(async (req, res) => {
   if (!user || !(await user.comparePassword(password))) return res.status(401).json({ message: "Invalid email or password" });
   res.json({ user: payload(user), token: generateToken(user._id) });
 });
+export const adminLogin = asyncHandler(async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({ message: "Email and password are required" });
+  const user = await User.findOne({ email: email.trim().toLowerCase() });
+  if (!user || user.role !== "admin" || !(await user.comparePassword(password))) return res.status(401).json({ message: "Invalid admin credentials" });
+  res.json({ user: payload(user), token: generateToken(user._id) });
+});
 export const getMe = asyncHandler(async (req, res) => res.json({ user: payload(req.user) }));
