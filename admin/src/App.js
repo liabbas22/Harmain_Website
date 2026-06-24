@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { adminApi } from "./api/adminApi";
 import { emptyCategory, emptyProduct } from "./constants/admin";
 import AdminShell from "./components/layout/AdminShell";
@@ -70,6 +70,12 @@ function App() {
   const [confirmation, setConfirmation] = useState(null);
   const [orderDetails, setOrderDetails] = useState(null);
   const [busyAction, setBusyAction] = useState("");
+  const [orderFilter, setOrderFilter] = useState("all");
+  const [filteredOrders, setFilteredOrders] = useState([]);
+  const [filteredOrdersTotal, setFilteredOrdersTotal] = useState(0);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersError, setOrdersError] = useState("");
+  const orderRequestRef = useRef(0);
 
   const logout = useCallback(() => {
     clearAdminSession();
@@ -82,6 +88,25 @@ function App() {
 
   const workspace = useAdminWorkspace(session?.token, logout);
   const { products, categories, orders, setOrders, loading, error, load, refreshOverview } = workspace;
+
+  const loadFilteredOrders = useCallback(async (filter) => {
+    if (!session?.token) return;
+    const requestId = ++orderRequestRef.current;
+    setOrdersLoading(true);
+    setOrdersError("");
+    try {
+      const result = await adminApi.getOrders(session.token, filter);
+      if (requestId !== orderRequestRef.current) return;
+      setFilteredOrders(result.orders || []);
+      setFilteredOrdersTotal(result.pagination?.total || 0);
+    } catch (requestError) {
+      if (requestId !== orderRequestRef.current) return;
+      if (requestError.status === 401 || requestError.status === 403) logout();
+      else setOrdersError(requestError.message || "Could not load orders.");
+    } finally {
+      if (requestId === orderRequestRef.current) setOrdersLoading(false);
+    }
+  }, [logout, session?.token]);
 
   const notify = useCallback((message, type = "success") => setToast({ message, type, id: Date.now() }), []);
 
@@ -106,6 +131,10 @@ function App() {
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
   }, [orderDetails, refreshOverview, view]);
+
+  useEffect(() => {
+    if (view === "orders") loadFilteredOrders(orderFilter);
+  }, [loadFilteredOrders, orderFilter, view]);
 
   const metrics = useMemo(() => ({
     revenue: orders.filter((order) => order.orderStatus !== "cancelled").reduce((sum, order) => sum + Number(order.total || 0), 0),
@@ -181,6 +210,7 @@ function App() {
       await adminApi.updateOrder(orderId, changes, session.token);
       setOrders((current) => current.map((order) => order._id === orderId ? { ...order, ...changes } : order));
       setOrderDetails((current) => current?._id === orderId ? { ...current, ...changes } : current);
+      if (view === "orders") await loadFilteredOrders(orderFilter);
       notify("Order updated.");
     } catch (requestError) {
       notify(requestError.message || "Order could not be updated.", "error");
@@ -199,7 +229,7 @@ function App() {
     message: entity === "product" ? "This product will be permanently removed from the menu and cannot be recovered." : "Delete this category only after its products have been reassigned. This action cannot be undone.",
   });
 
-  return <><AdminShell session={session} view={view} onViewChange={setView} onLogout={logout} loading={loading} onRefresh={load}>{error && <div className="mt-5 flex items-center justify-between gap-4 border-l-4 border-brand-600 bg-red-50 px-4 py-3 text-sm font-bold text-brand-700"><span>{error}</span><button className="text-xs font-extrabold underline" onClick={load}>Try again</button></div>}{view === "overview" && <OverviewPage metrics={metrics} orders={orders} products={products} onNavigate={setView} onOpenOrder={setOrderDetails} />}{view === "products" && <ProductsPage products={filteredProducts} categories={categories} query={productQuery} categoryFilter={categoryFilter} onQueryChange={setProductQuery} onCategoryFilterChange={setCategoryFilter} onNew={() => setProductEditor({ id: null, values: emptyProduct(categories[0]?._id || "") })} onEdit={(product) => setProductEditor(toProductEditor(product))} onDelete={(product) => requestDelete("product", product)} busyAction={busyAction} />}{view === "categories" && <CategoriesPage categories={categories} products={products} onNew={() => setCategoryEditor({ id: null, values: emptyCategory })} onEdit={(category) => setCategoryEditor({ id: category._id, values: { ...emptyCategory, ...category } })} onDelete={(category) => requestDelete("category", category)} busyAction={busyAction} />}{view === "orders" && <OrdersPage orders={orders} onUpdate={updateOrder} onOpenOrder={setOrderDetails} busyAction={busyAction} />}</AdminShell>{productEditor && <ProductEditor editor={productEditor} categories={categories} onChange={setProductEditor} onClose={() => setProductEditor(null)} onSave={saveProduct} busy={busyAction === "product-save"} />}{categoryEditor && <CategoryEditor editor={categoryEditor} onChange={setCategoryEditor} onClose={() => setCategoryEditor(null)} onSave={saveCategory} busy={busyAction === "category-save"} />}{confirmation && <ConfirmDialog title={confirmation.title} message={confirmation.message} onCancel={() => setConfirmation(null)} onConfirm={confirmDelete} />}{orderDetails && <OrderDetailsModal order={orderDetails} onClose={() => setOrderDetails(null)} />}<Toast toast={toast} /></>;
+  return <><AdminShell session={session} view={view} onViewChange={setView} onLogout={logout} loading={view === "orders" ? ordersLoading : loading} onRefresh={view === "orders" ? () => loadFilteredOrders(orderFilter) : load}>{error && <div className="mt-5 flex items-center justify-between gap-4 border-l-4 border-brand-600 bg-red-50 px-4 py-3 text-sm font-bold text-brand-700"><span>{error}</span><button className="text-xs font-extrabold underline" onClick={load}>Try again</button></div>}{view === "overview" && <OverviewPage metrics={metrics} orders={orders} products={products} onNavigate={setView} onOpenOrder={setOrderDetails} />}{view === "products" && <ProductsPage products={filteredProducts} categories={categories} query={productQuery} categoryFilter={categoryFilter} onQueryChange={setProductQuery} onCategoryFilterChange={setCategoryFilter} onNew={() => setProductEditor({ id: null, values: emptyProduct(categories[0]?._id || "") })} onEdit={(product) => setProductEditor(toProductEditor(product))} onDelete={(product) => requestDelete("product", product)} busyAction={busyAction} />}{view === "categories" && <CategoriesPage categories={categories} products={products} onNew={() => setCategoryEditor({ id: null, values: emptyCategory })} onEdit={(category) => setCategoryEditor({ id: category._id, values: { ...emptyCategory, ...category } })} onDelete={(category) => requestDelete("category", category)} busyAction={busyAction} />}{view === "orders" && <OrdersPage orders={filteredOrders} total={filteredOrdersTotal} filter={orderFilter} onFilterChange={setOrderFilter} onUpdate={updateOrder} onOpenOrder={setOrderDetails} busyAction={busyAction} loading={ordersLoading} error={ordersError} />}</AdminShell>{productEditor && <ProductEditor editor={productEditor} categories={categories} onChange={setProductEditor} onClose={() => setProductEditor(null)} onSave={saveProduct} busy={busyAction === "product-save"} />}{categoryEditor && <CategoryEditor editor={categoryEditor} onChange={setCategoryEditor} onClose={() => setCategoryEditor(null)} onSave={saveCategory} busy={busyAction === "category-save"} />}{confirmation && <ConfirmDialog title={confirmation.title} message={confirmation.message} onCancel={() => setConfirmation(null)} onConfirm={confirmDelete} />}{orderDetails && <OrderDetailsModal order={orderDetails} onClose={() => setOrderDetails(null)} />}<Toast toast={toast} /></>;
 }
 
 export default App;

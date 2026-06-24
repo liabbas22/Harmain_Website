@@ -25,7 +25,7 @@ export const adminApi = {
   getProfile: (token) => request("/auth/admin/me", { token }),
   getProducts: (token) => request("/products?limit=100", { token }),
   getCategories: (token) => request("/categories?all=true", { token }),
-  getOrders: (token) => request("/orders?limit=100", { token }),
+  getOrders: (token, filter = "all") => request(`/orders?limit=100&filter=${encodeURIComponent(filter)}`, { token }),
   saveProduct: (id, body, token) =>
     request(id ? `/products/${id}` : "/products", {
       method: id ? "PATCH" : "POST",

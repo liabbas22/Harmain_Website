@@ -10,3 +10,9 @@
 ◇ injected env (3) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
 ✅ Server running on port 5000
 MongoDB Connected
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server.js`[39m
+◇ injected env (3) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+✅ Server running on port 5000
+MongoDB Connected

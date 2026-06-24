@@ -11,6 +11,15 @@ export const ORDER_STATUSES = [
 
 export const PAYMENT_STATUSES = ["pending", "paid", "failed", "refunded"];
 
+export const ORDER_FILTERS = [
+  ["all", "All orders"],
+  ["today", "Today"],
+  ["pending", "Pending"],
+  ["preparing", "Preparing"],
+  ["delivered", "Delivered"],
+  ["cancelled", "Cancelled"],
+];
+
 export const navigationItems = [
   ["overview", "Overview"],
   ["products", "Products"],
