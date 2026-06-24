@@ -21,6 +21,7 @@ import { productCategoryId, shortId } from "./utils/format";
 import { clearAdminSession, readAdminSession } from "./utils/session";
 
 const newOptionId = () => `${Date.now()}-${Math.random()}`;
+const unreadOrderStorageKey = (userId) => `harmain_admin_unread_orders_${userId}`;
 
 const toProductEditor = (product) => ({
   id: product._id,
@@ -81,7 +82,8 @@ function App() {
   const [filteredOrdersTotal, setFilteredOrdersTotal] = useState(0);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [ordersError, setOrdersError] = useState("");
-  const [unreadOrderCount, setUnreadOrderCount] = useState(0);
+  const [unreadOrderIds, setUnreadOrderIds] = useState(() => new Set());
+  const [unreadOrdersOwner, setUnreadOrdersOwner] = useState(null);
   const orderRequestRef = useRef(0);
 
   const logout = useCallback(() => {
@@ -93,6 +95,8 @@ function App() {
     setConfirmation(null);
     setCancelEditor(null);
     setOrderDetails(null);
+    setUnreadOrderIds(new Set());
+    setUnreadOrdersOwner(null);
   }, []);
 
   const workspace = useAdminWorkspace(session?.token, logout);
@@ -123,7 +127,7 @@ function App() {
     if (!order?._id) return;
     setOrders((current) => [order, ...current.filter((entry) => entry._id !== order._id)].slice(0, 100));
     if (view === "orders") loadFilteredOrders(orderFilter);
-    else setUnreadOrderCount((current) => current + 1);
+    setUnreadOrderIds((current) => new Set(current).add(order._id));
     notify(`New order ${shortId(order._id)} received.`, "info");
   }, [loadFilteredOrders, notify, orderFilter, setOrders, view]);
 
@@ -139,9 +143,31 @@ function App() {
 
   useEffect(() => {
     if (!toast) return undefined;
-    const timer = window.setTimeout(() => setToast(null), 3500);
+    const timer = window.setTimeout(() => setToast(null), toast.type === "info" ? 8000 : 3500);
     return () => window.clearTimeout(timer);
   }, [toast]);
+
+  useEffect(() => {
+    const userId = session?.user?.id;
+    if (!userId) {
+      setUnreadOrderIds(new Set());
+      setUnreadOrdersOwner(null);
+      return;
+    }
+    try {
+      const savedIds = JSON.parse(localStorage.getItem(unreadOrderStorageKey(userId)) || "[]");
+      setUnreadOrderIds(new Set(Array.isArray(savedIds) ? savedIds.filter((id) => typeof id === "string") : []));
+    } catch {
+      setUnreadOrderIds(new Set());
+    }
+    setUnreadOrdersOwner(userId);
+  }, [session?.user?.id]);
+
+  useEffect(() => {
+    const userId = session?.user?.id;
+    if (!userId || unreadOrdersOwner !== userId) return;
+    localStorage.setItem(unreadOrderStorageKey(userId), JSON.stringify([...unreadOrderIds]));
+  }, [session?.user?.id, unreadOrderIds, unreadOrdersOwner]);
 
   useEffect(() => {
     if (view !== "overview" || orderDetails) return undefined;
@@ -163,9 +189,14 @@ function App() {
     if (view === "orders") loadFilteredOrders(orderFilter);
   }, [loadFilteredOrders, orderFilter, view]);
 
-  useEffect(() => {
-    if (view === "orders") setUnreadOrderCount(0);
-  }, [view]);
+  const markOrderRead = useCallback((orderId) => {
+    setUnreadOrderIds((current) => {
+      if (!current.has(orderId)) return current;
+      const next = new Set(current);
+      next.delete(orderId);
+      return next;
+    });
+  }, []);
 
   const metrics = useMemo(() => ({
     revenue: orders.filter((order) => order.orderStatus !== "cancelled").reduce((sum, order) => sum + Number(order.total || 0), 0),
@@ -309,7 +340,7 @@ function App() {
     message: entity === "product" ? "This product will be permanently removed from the menu and cannot be recovered." : "Delete this category only after its products have been reassigned. This action cannot be undone.",
   });
 
-  return <><AdminShell session={session} view={view} onViewChange={setView} onLogout={logout} loading={view === "orders" ? ordersLoading : loading} onRefresh={view === "orders" ? () => loadFilteredOrders(orderFilter) : load} newOrderCount={unreadOrderCount} realtimeConnected={realtimeConnected}>{error && <div className="mt-5 flex items-center justify-between gap-4 border-l-4 border-brand-600 bg-red-50 px-4 py-3 text-sm font-bold text-brand-700"><span>{error}</span><button className="text-xs font-extrabold underline" onClick={load}>Try again</button></div>}{view === "overview" && <OverviewPage metrics={metrics} orders={orders} products={products} onNavigate={setView} onOpenOrder={setOrderDetails} />}{view === "products" && <ProductsPage products={filteredProducts} categories={categories} query={productQuery} categoryFilter={categoryFilter} onQueryChange={setProductQuery} onCategoryFilterChange={setCategoryFilter} onNew={() => setProductEditor({ id: null, values: emptyProduct(categories[0]?._id || "") })} onEdit={(product) => setProductEditor(toProductEditor(product))} onDelete={(product) => requestDelete("product", product)} busyAction={busyAction} />}{view === "categories" && <CategoriesPage categories={categories} products={products} onNew={() => setCategoryEditor({ id: null, values: emptyCategory })} onEdit={(category) => setCategoryEditor({ id: category._id, values: { ...emptyCategory, ...category } })} onDelete={(category) => requestDelete("category", category)} busyAction={busyAction} />}{view === "orders" && <OrdersPage orders={filteredOrders} total={filteredOrdersTotal} filter={orderFilter} onFilterChange={setOrderFilter} onUpdate={updateOrder} onCancel={(order) => setCancelEditor({ order })} onOpenOrder={setOrderDetails} busyAction={busyAction} loading={ordersLoading} error={ordersError} />}{view === "riders" && <RidersPage riders={riders} onNew={() => setRiderEditor({ id: null, values: emptyRider })} onEdit={(rider) => setRiderEditor({ id: rider._id, values: { ...emptyRider, ...rider, password: "" } })} />}</AdminShell>{productEditor && <ProductEditor editor={productEditor} categories={categories} onChange={setProductEditor} onClose={() => setProductEditor(null)} onSave={saveProduct} busy={busyAction === "product-save"} />}{categoryEditor && <CategoryEditor editor={categoryEditor} onChange={setCategoryEditor} onClose={() => setCategoryEditor(null)} onSave={saveCategory} busy={busyAction === "category-save"} />}{riderEditor && <RiderEditor editor={riderEditor} onChange={setRiderEditor} onClose={() => setRiderEditor(null)} onSave={saveRider} busy={busyAction === "rider-save"} />}{cancelEditor && <CancelOrderModal order={cancelEditor.order} onClose={() => setCancelEditor(null)} onConfirm={saveCancellation} busy={busyAction === `order-${cancelEditor.order._id}`} />}{confirmation && <ConfirmDialog title={confirmation.title} message={confirmation.message} onCancel={() => setConfirmation(null)} onConfirm={confirmDelete} />}{orderDetails && <OrderDetailsModal order={orderDetails} riders={riders} onAssignRider={assignRider} assigning={busyAction === `rider-${orderDetails._id}`} onUpdateOrder={updateOrder} updatingOrder={busyAction === `order-${orderDetails._id}`} onClose={() => setOrderDetails(null)} />}<Toast toast={toast} /></>;
+  return <><AdminShell session={session} view={view} onViewChange={setView} onLogout={logout} loading={view === "orders" ? ordersLoading : loading} onRefresh={view === "orders" ? () => loadFilteredOrders(orderFilter) : load} newOrderCount={unreadOrderIds.size} realtimeConnected={realtimeConnected}>{error && <div className="mt-5 flex items-center justify-between gap-4 border-l-4 border-brand-600 bg-red-50 px-4 py-3 text-sm font-bold text-brand-700"><span>{error}</span><button className="text-xs font-extrabold underline" onClick={load}>Try again</button></div>}{view === "overview" && <OverviewPage metrics={metrics} orders={orders} products={products} unreadOrderIds={unreadOrderIds} onMarkOrderRead={markOrderRead} onNavigate={setView} onOpenOrder={setOrderDetails} />}{view === "products" && <ProductsPage products={filteredProducts} categories={categories} query={productQuery} categoryFilter={categoryFilter} onQueryChange={setProductQuery} onCategoryFilterChange={setCategoryFilter} onNew={() => setProductEditor({ id: null, values: emptyProduct(categories[0]?._id || "") })} onEdit={(product) => setProductEditor(toProductEditor(product))} onDelete={(product) => requestDelete("product", product)} busyAction={busyAction} />}{view === "categories" && <CategoriesPage categories={categories} products={products} onNew={() => setCategoryEditor({ id: null, values: emptyCategory })} onEdit={(category) => setCategoryEditor({ id: category._id, values: { ...emptyCategory, ...category } })} onDelete={(category) => requestDelete("category", category)} busyAction={busyAction} />}{view === "orders" && <OrdersPage orders={filteredOrders} total={filteredOrdersTotal} filter={orderFilter} unreadOrderIds={unreadOrderIds} onMarkOrderRead={markOrderRead} onFilterChange={setOrderFilter} onUpdate={updateOrder} onCancel={(order) => setCancelEditor({ order })} onOpenOrder={setOrderDetails} busyAction={busyAction} loading={ordersLoading} error={ordersError} />}{view === "riders" && <RidersPage riders={riders} onNew={() => setRiderEditor({ id: null, values: emptyRider })} onEdit={(rider) => setRiderEditor({ id: rider._id, values: { ...emptyRider, ...rider, password: "" } })} />}</AdminShell>{productEditor && <ProductEditor editor={productEditor} categories={categories} onChange={setProductEditor} onClose={() => setProductEditor(null)} onSave={saveProduct} busy={busyAction === "product-save"} />}{categoryEditor && <CategoryEditor editor={categoryEditor} onChange={setCategoryEditor} onClose={() => setCategoryEditor(null)} onSave={saveCategory} busy={busyAction === "category-save"} />}{riderEditor && <RiderEditor editor={riderEditor} onChange={setRiderEditor} onClose={() => setRiderEditor(null)} onSave={saveRider} busy={busyAction === "rider-save"} />}{cancelEditor && <CancelOrderModal order={cancelEditor.order} onClose={() => setCancelEditor(null)} onConfirm={saveCancellation} busy={busyAction === `order-${cancelEditor.order._id}`} />}{confirmation && <ConfirmDialog title={confirmation.title} message={confirmation.message} onCancel={() => setConfirmation(null)} onConfirm={confirmDelete} />}{orderDetails && <OrderDetailsModal order={orderDetails} riders={riders} onAssignRider={assignRider} assigning={busyAction === `rider-${orderDetails._id}`} onUpdateOrder={updateOrder} updatingOrder={busyAction === `order-${orderDetails._id}`} onClose={() => setOrderDetails(null)} />}<Toast toast={toast} /></>;
 }
 
 export default App;

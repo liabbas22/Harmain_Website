@@ -3,10 +3,12 @@ import OrderTable from "./OrderTable";
 
 export default function OrdersPage({
   orders,
+  unreadOrderIds,
   filter,
   onFilterChange,
   onUpdate,
   onCancel,
+  onMarkOrderRead,
   onOpenOrder,
   busyAction,
   loading,
@@ -57,8 +59,10 @@ export default function OrdersPage({
         <div className="overflow-x-auto">
           <OrderTable
             orders={orders}
+            unreadOrderIds={unreadOrderIds}
             onUpdate={onUpdate}
             onCancel={onCancel}
+            onMarkOrderRead={onMarkOrderRead}
             onOpenOrder={onOpenOrder}
             busyAction={busyAction}
           />

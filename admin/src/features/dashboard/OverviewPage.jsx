@@ -4,7 +4,7 @@ import ProductThumb from "../../components/ui/ProductThumb";
 import { money } from "../../utils/format";
 import OrderTable from "../orders/OrderTable";
 
-export default function OverviewPage({ metrics, orders, products, onNavigate, onOpenOrder }) {
+export default function OverviewPage({ metrics, orders, products, unreadOrderIds, onMarkOrderRead, onNavigate, onOpenOrder }) {
   const statusCounts = ORDER_STATUSES.map((status) => ({
     status,
     count: orders.filter((order) => order.orderStatus === status).length,
@@ -82,7 +82,7 @@ export default function OverviewPage({ metrics, orders, products, onNavigate, on
           </div>
           <Button variant="text" className="min-h-0 px-0 text-xs" onClick={() => onNavigate("orders")}>Open queue</Button>
         </div>
-        <div className="overflow-x-auto"><OrderTable orders={orders.slice(0, 6)} compact onOpenOrder={onOpenOrder} /></div>
+        <div className="overflow-x-auto"><OrderTable orders={orders.slice(0, 6)} unreadOrderIds={unreadOrderIds} compact onMarkOrderRead={onMarkOrderRead} onOpenOrder={onOpenOrder} /></div>
       </section>
     </div>
   );

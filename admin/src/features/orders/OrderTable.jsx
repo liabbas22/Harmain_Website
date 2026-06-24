@@ -4,14 +4,19 @@ import StatusBadge from "../../components/ui/StatusBadge";
 
 export default function OrderTable({
   orders,
+  unreadOrderIds = new Set(),
   compact = false,
   busyAction,
   onCancel,
+  onMarkOrderRead,
   onOpenOrder,
   onUpdate,
 }) {
   const openFromRow = (event, order) => {
-    if (!event.target.closest("select")) onOpenOrder?.(order);
+    if (!event.target.closest("select")) {
+      onMarkOrderRead?.(order._id);
+      onOpenOrder?.(order);
+    }
   };
 
   return (
@@ -40,10 +45,11 @@ export default function OrderTable({
                 (event.key === "Enter" || event.key === " ")
               ) {
                 event.preventDefault();
+                onMarkOrderRead?.(order._id);
                 onOpenOrder?.(order);
               }
             }}
-            className="text-sm transition border-b outline-none cursor-pointer border-slate-100 text-slate-700 hover:bg-red-50 focus:bg-red-50 focus:ring-2 focus:ring-inset focus:ring-brand-600"
+            className={`text-sm transition border-b outline-none cursor-pointer border-slate-100 text-slate-700 focus:ring-2 focus:ring-inset focus:ring-brand-600 ${unreadOrderIds.has(order._id) ? "bg-red-50 hover:bg-red-100 focus:bg-red-100" : "hover:bg-red-50 focus:bg-red-50"}`}
           >
             <td className="px-4 py-3 font-extrabold text-slate-800">
               {shortId(order._id)}
