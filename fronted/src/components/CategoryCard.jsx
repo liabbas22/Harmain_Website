@@ -9,7 +9,9 @@ const CategoryCard = ({ item }) => {
   const [selectedOption, setSelectedOption] = useState(item?.options?.[0]);
   const [specialInstructions, setSpecialInstructions] = useState("");
   const [toast, setToast] = useState(false);
-  const isAvailable = item?.isAvailable !== false;
+  const isOutOfStock = item?.isOutOfStock === true || Number(item?.stock) <= 0;
+  const isAvailable = item?.isAvailable !== false && !isOutOfStock;
+  const availabilityLabel = isOutOfStock ? "Stock out" : "Unavailable";
 
   const handleOpenModal = () => {
     setQuantity(1);
@@ -63,7 +65,7 @@ const CategoryCard = ({ item }) => {
       bg-gray-50 rounded-2xl hover:shadow-md group hover:scale-[1.02] hover:bg-red-100"
         onClick={handleOpenModal}
       >
-        {!isAvailable && <span className="absolute top-3 left-3 z-10 rounded-md bg-red-700 px-2 py-1 text-[10px] font-extrabold uppercase tracking-wide text-white shadow-sm">Unavailable</span>}
+        {!isAvailable && <span className="absolute top-3 left-3 z-10 rounded-md bg-red-700 px-2 py-1 text-[10px] font-extrabold uppercase tracking-wide text-white shadow-sm">{availabilityLabel}</span>}
         <div className="overflow-hidden w-28 h-28 md:w-40 md:h-40 rounded-xl">
           <img
             src={item?.image}
@@ -115,7 +117,7 @@ const CategoryCard = ({ item }) => {
             )}
 
             <button disabled={!isAvailable} onClick={addToCart} className="px-4 py-1 text-sm font-bold text-white transition-all duration-300 ease-in-out bg-red-700 rounded-md md:px-6 lg:py-2 lg:px-6 hover:bg-red-800 hover:shadow-md w-fit disabled:cursor-not-allowed disabled:bg-gray-400 disabled:hover:bg-gray-400 disabled:hover:shadow-none">
-              {isAvailable ? "Add to Cart" : "Unavailable"}
+              {isAvailable ? "Add to Cart" : availabilityLabel}
             </button>
           </div>
         </div>

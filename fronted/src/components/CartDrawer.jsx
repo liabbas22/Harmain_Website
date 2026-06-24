@@ -42,6 +42,9 @@ export default function CartDrawer({ onClose }) {
     window.dispatchEvent(new Event("harmain-cart-updated"));
   };
   const add = async (id) => {
+    const product = products.find((entry) => entry._id === id);
+    if (!product || product.isAvailable === false || Number(product.stock) <= 0)
+      return;
     await api.post("/cart", { productId: id, quantity: 1 });
     await load();
     window.dispatchEvent(new Event("harmain-cart-updated"));
@@ -54,7 +57,10 @@ export default function CartDrawer({ onClose }) {
   const discount = 0;
   const canCheckout = subtotal >= MINIMUM_ORDER;
   const recommendations = products.filter(
-    (product) => !items.some((item) => item.product?._id === product._id),
+    (product) =>
+      product.isAvailable !== false &&
+      Number(product.stock) > 0 &&
+      !items.some((item) => item.product?._id === product._id),
   );
   const visible = recommendations.slice(offset, offset + 2);
   return (

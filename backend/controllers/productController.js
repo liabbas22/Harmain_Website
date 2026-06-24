@@ -1,5 +1,6 @@
 import Product from "../models/Product.js";
 import asyncHandler from "../utils/asyncHandler.js";
+import { emitStockAlert } from "../utils/stockAlerts.js";
 
 export const getProducts = asyncHandler(async (req, res) => {
   const { category, search, available, page = 1, limit = 24 } = req.query;
@@ -31,15 +32,21 @@ export const getProductById = asyncHandler(async (req, res) => {
 
 export const createProduct = asyncHandler(async (req, res) => {
   const product = await Product.create(req.body);
+  emitStockAlert(req, product);
   res.status(201).json(product);
 });
 
 export const updateProduct = asyncHandler(async (req, res) => {
+  const currentProduct = await Product.findById(req.params.id);
+  if (!currentProduct)
+    return res.status(404).json({ message: "Product not found" });
+
   const product = await Product.findByIdAndUpdate(req.params.id, req.body, {
     new: true,
     runValidators: true,
   }).populate("category");
   if (!product) return res.status(404).json({ message: "Product not found" });
+  emitStockAlert(req, product, currentProduct.stock);
   res.json(product);
 });
 

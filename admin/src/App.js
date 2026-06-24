@@ -100,7 +100,7 @@ function App() {
   }, []);
 
   const workspace = useAdminWorkspace(session?.token, logout);
-  const { products, categories, orders, riders, setOrders, loading, error, load, refreshOverview } = workspace;
+  const { products, categories, orders, riders, setProducts, setOrders, loading, error, load, refreshOverview } = workspace;
 
   const loadFilteredOrders = useCallback(async (filter) => {
     if (!session?.token) return;
@@ -139,11 +139,23 @@ function App() {
     if (view === "orders") loadFilteredOrders(orderFilter);
   }, [loadFilteredOrders, orderFilter, setOrders, view]);
 
-  const realtimeConnected = useOrderNotifications(session?.token, handleOrderCreated, handleOrderUpdated);
+  const handleStockAlert = useCallback(({ product, kind }) => {
+    if (!product?._id) return;
+    setProducts((current) => current.map((entry) => entry._id === product._id ? { ...entry, ...product } : entry));
+    notify(
+      kind === "out_of_stock"
+        ? `${product.name} is now out of stock.`
+        : `Low stock: ${product.name} has ${product.stock} left.`,
+      kind === "out_of_stock" ? "error" : "warning",
+    );
+  }, [notify, setProducts]);
+
+  const realtimeConnected = useOrderNotifications(session?.token, handleOrderCreated, handleOrderUpdated, handleStockAlert);
 
   useEffect(() => {
     if (!toast) return undefined;
-    const timer = window.setTimeout(() => setToast(null), toast.type === "info" ? 8000 : 3500);
+    const attentionToast = ["info", "warning", "error"].includes(toast.type);
+    const timer = window.setTimeout(() => setToast(null), attentionToast ? 8000 : 3500);
     return () => window.clearTimeout(timer);
   }, [toast]);
 
@@ -220,9 +232,28 @@ function App() {
     }
     setBusyAction("product-save");
     try {
-      await adminApi.saveProduct(editor.id, payload, session.token);
+      const savedProduct = await adminApi.saveProduct(editor.id, payload, session.token);
+      const previousStock = Number(
+        products.find((product) => product._id === editor.id)?.stock,
+      );
+      const stockChanged =
+        !Number.isFinite(previousStock) || previousStock !== Number(savedProduct.stock);
+      const needsStockAlert = Number(savedProduct.stock) <= 5 && stockChanged;
       setProductEditor(null);
-      notify(editor.id ? "Product updated." : "Product added to menu.");
+      notify(
+        needsStockAlert
+          ? Number(savedProduct.stock) === 0
+            ? `${savedProduct.name} is now out of stock.`
+            : `Low stock: ${savedProduct.name} has ${savedProduct.stock} left.`
+          : editor.id
+            ? "Product updated."
+            : "Product added to menu.",
+        needsStockAlert
+          ? Number(savedProduct.stock) === 0
+            ? "error"
+            : "warning"
+          : "success",
+      );
       await load();
     } catch (requestError) {
       notify(requestError.message || "Product could not be saved.", "error");

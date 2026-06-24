@@ -15,7 +15,9 @@ const ModalDetailsPage = ({
   setSpecialInstructions,
   onAddToCart,
 }) => {
-  const isAvailable = item?.isAvailable !== false;
+  const isOutOfStock = item?.isOutOfStock === true || Number(item?.stock) <= 0;
+  const isAvailable = item?.isAvailable !== false && !isOutOfStock;
+  const availabilityLabel = isOutOfStock ? "Stock out" : "Unavailable";
   return (
     <div
       className={`fixed inset-0 z-50 flex items-center justify-center p-3 transition-all duration-300 ${
@@ -91,7 +93,7 @@ const ModalDetailsPage = ({
                   )}
               </div>
 
-              {!isAvailable && <span className="rounded-md bg-red-700 px-2 py-1 text-xs font-extrabold uppercase tracking-wide text-white">Unavailable</span>}
+              {!isAvailable && <span className="rounded-md bg-red-700 px-2 py-1 text-xs font-extrabold uppercase tracking-wide text-white">{availabilityLabel}</span>}
 
               <div className="items-center hidden gap-3 lg:flex">
                 <button className="flex items-center justify-center w-12 h-12 text-white transition-all bg-red-700 rounded-full shadow-lg hover:bg-red-600">
@@ -215,7 +217,7 @@ const ModalDetailsPage = ({
 
                 <span className="opacity-50">|</span>
 
-                <span className="flex items-center gap-3">{isAvailable ? <>Add to Cart<span className="transition-all duration-200 group-hover:translate-x-1"><IoMdArrowRoundForward className="w-4 h-4" /></span></> : "Unavailable"}</span>
+                <span className="flex items-center gap-3">{isAvailable ? <>Add to Cart<span className="transition-all duration-200 group-hover:translate-x-1"><IoMdArrowRoundForward className="w-4 h-4" /></span></> : availabilityLabel}</span>
               </button>
             </div>
           </div>

@@ -4,10 +4,11 @@ import { io } from "socket.io-client";
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 const SOCKET_URL = API_URL.replace(/\/api\/?$/, "");
 
-export function useOrderNotifications(token, onOrderCreated, onOrderUpdated) {
+export function useOrderNotifications(token, onOrderCreated, onOrderUpdated, onStockAlert) {
   const [connected, setConnected] = useState(false);
   const createdHandlerRef = useRef(onOrderCreated);
   const updatedHandlerRef = useRef(onOrderUpdated);
+  const stockAlertHandlerRef = useRef(onStockAlert);
 
   useEffect(() => {
     createdHandlerRef.current = onOrderCreated;
@@ -16,6 +17,10 @@ export function useOrderNotifications(token, onOrderCreated, onOrderUpdated) {
   useEffect(() => {
     updatedHandlerRef.current = onOrderUpdated;
   }, [onOrderUpdated]);
+
+  useEffect(() => {
+    stockAlertHandlerRef.current = onStockAlert;
+  }, [onStockAlert]);
 
   useEffect(() => {
     if (!token) {
@@ -33,6 +38,7 @@ export function useOrderNotifications(token, onOrderCreated, onOrderUpdated) {
     socket.on("connect_error", () => setConnected(false));
     socket.on("order:created", ({ order }) => createdHandlerRef.current?.(order));
     socket.on("order:updated", ({ order }) => updatedHandlerRef.current?.(order));
+    socket.on("stock:alert", (alert) => stockAlertHandlerRef.current?.(alert));
 
     return () => socket.disconnect();
   }, [token]);

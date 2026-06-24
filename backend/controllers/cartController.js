@@ -47,6 +47,8 @@ export const addItem = asyncHandler(async (req, res) => {
   const product = await Product.findById(productId);
   if (!product || !product.isAvailable)
     return res.status(404).json({ message: "Food item is unavailable" });
+  if (product.stock <= 0)
+    return res.status(400).json({ message: "Food item is out of stock" });
   const choice = selected(product, optionName);
   if (!choice)
     return res.status(400).json({ message: "Selected option is invalid" });
@@ -62,7 +64,7 @@ export const addItem = asyncHandler(async (req, res) => {
     cart.items
       .filter((entry) => entry.product.toString() === productId)
       .reduce((sum, entry) => sum + entry.quantity, 0) + quantity;
-  if (product.stock > 0 && requestedQuantity > product.stock)
+  if (requestedQuantity > product.stock)
     return res
       .status(400)
       .json({ message: "Requested quantity exceeds available stock" });
@@ -96,6 +98,24 @@ export const updateItem = asyncHandler(async (req, res) => {
       (entry.specialInstructions || "") === specialInstructions,
   );
   if (!item) return res.status(404).json({ message: "Cart item not found" });
+
+  const product = await Product.findById(req.params.productId);
+  if (!product || !product.isAvailable)
+    return res.status(404).json({ message: "Food item is unavailable" });
+  if (product.stock <= 0)
+    return res.status(400).json({ message: "Food item is out of stock" });
+
+  const requestedQuantity =
+    cart.items
+      .filter((entry) => entry.product.toString() === req.params.productId)
+      .reduce((sum, entry) => sum + entry.quantity, 0) -
+    item.quantity +
+    quantity;
+  if (requestedQuantity > product.stock)
+    return res
+      .status(400)
+      .json({ message: "Requested quantity exceeds available stock" });
+
   item.quantity = quantity;
   await cart.save();
   res.json(await populate(cart));

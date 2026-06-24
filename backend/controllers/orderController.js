@@ -4,6 +4,7 @@ import Order from "../models/Order.js";
 import Product from "../models/Product.js";
 import User from "../models/User.js";
 import asyncHandler from "../utils/asyncHandler.js";
+import { emitStockAlert } from "../utils/stockAlerts.js";
 
 const statuses = [
   "placed",
@@ -146,9 +147,11 @@ export const checkout = asyncHandler(async (req, res) => {
     requestedByProduct.set(productId, current);
   });
   const hasUnavailableItem =
-    cart.items.some(({ product }) => !product || !product.isAvailable) ||
+    cart.items.some(
+      ({ product }) => !product || !product.isAvailable || product.stock <= 0,
+    ) ||
     [...requestedByProduct.values()].some(
-      ({ product, quantity }) => product.stock > 0 && quantity > product.stock,
+      ({ product, quantity }) => quantity > product.stock,
     );
   if (hasUnavailableItem)
     return res
@@ -185,11 +188,13 @@ export const checkout = asyncHandler(async (req, res) => {
     deliveryFee,
     total: subtotal + deliveryFee,
   });
-  await Promise.all(
-    [...requestedByProduct.values()].map(({ product, quantity }) =>
-      Product.updateOne(
-        { _id: product._id, stock: { $gt: 0 } },
+  const requestedProducts = [...requestedByProduct.values()];
+  const updatedProducts = await Promise.all(
+    requestedProducts.map(({ product, quantity }) =>
+      Product.findOneAndUpdate(
+        { _id: product._id, stock: { $gte: quantity } },
         { $inc: { stock: -quantity } },
+        { new: true },
       ),
     ),
   );
@@ -197,6 +202,9 @@ export const checkout = asyncHandler(async (req, res) => {
   await cart.save();
   await order.populate("user", "name email");
   emitOrderEvent(req, "order:created", order);
+  updatedProducts.forEach((product, index) =>
+    emitStockAlert(req, product, requestedProducts[index].product.stock),
+  );
   res.status(201).json(order);
 });
 
