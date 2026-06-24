@@ -8,8 +8,16 @@ export default function AdminShell({
   onLogout,
   loading,
   onRefresh,
+  newOrderCount = 0,
+  realtimeConnected = false,
   children,
 }) {
+  const viewLabel =
+    navigationItems.find(([id]) => id === view)?.[1] ||
+    view
+      .replaceAll("_", " ")
+      .replace(/\b\w/g, (character) => character.toUpperCase());
+
   return (
     <div className="min-h-screen bg-slate-100 lg:grid lg:grid-cols-[240px_minmax(0,1fr)]">
       <aside className="bg-[#191c21] p-3 text-slate-200 lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col lg:p-5">
@@ -29,19 +37,20 @@ export default function AdminShell({
             <button
               key={id}
               onClick={() => onViewChange(id)}
-              className={`min-h-10 shrink-0 rounded-md px-3 text-left text-sm font-bold transition ${view === id ? "bg-brand-600 text-white" : "text-slate-300 hover:bg-slate-800 hover:text-white"}`}
+              className={`flex min-h-10 shrink-0 items-center justify-between gap-3 rounded-md px-3 text-left text-sm font-bold transition ${view === id ? "bg-brand-600 text-white" : "text-slate-300 hover:bg-slate-800 hover:text-white"}`}
             >
-              {label}
+              <span>{label}</span>
+              {id === "orders" && newOrderCount > 0 && <span className="grid h-5 min-w-5 place-items-center rounded-full bg-white px-1 text-[10px] font-extrabold text-brand-700">{newOrderCount > 99 ? "99+" : newOrderCount}</span>}
             </button>
           ))}
         </nav>
-        <div className="mt-3 flex items-center justify-between border-t border-slate-700 px-2 pt-3 lg:hidden">
-          <span className="truncate pr-3 text-xs font-bold text-slate-300">
+        <div className="flex items-center justify-between px-2 pt-3 mt-3 border-t border-slate-700 lg:hidden">
+          <span className="pr-3 text-xs font-bold truncate text-slate-300">
             {session.user?.name || "Administrator"}
           </span>
           <Button
             variant="danger"
-            className="min-h-8 shrink-0 px-3 text-xs"
+            className="px-3 text-xs min-h-8 shrink-0"
             onClick={onLogout}
           >
             Sign out
@@ -75,14 +84,12 @@ export default function AdminShell({
               Operations
             </p>
             <h1 className="mt-1 text-2xl font-extrabold text-slate-900">
-              {view
-                .replaceAll("_", " ")
-                .replace(/\b\w/g, (character) => character.toUpperCase())}
+              {viewLabel}
             </h1>
           </div>
           <div className="flex items-center justify-between gap-3 sm:justify-end">
-            <span className="inline-flex items-center gap-2 text-xs font-extrabold text-emerald-700 before:h-2 before:w-2 before:rounded-full before:bg-emerald-600">
-              Live data
+            <span className={`inline-flex items-center gap-2 text-xs font-extrabold before:h-2 before:w-2 before:rounded-full ${realtimeConnected ? "text-emerald-700 before:bg-emerald-600" : "text-slate-500 before:bg-slate-400"}`}>
+              {realtimeConnected ? "Live notifications" : "Notifications reconnecting"}
             </span>
             <Button variant="secondary" onClick={onRefresh} disabled={loading}>
               {loading ? "Refreshing..." : "Refresh"}

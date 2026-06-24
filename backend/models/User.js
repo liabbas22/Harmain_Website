@@ -22,9 +22,20 @@ const userSchema = new mongoose.Schema(
       required: true,
     },
 
+    phone: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+
     role: {
       type: String,
-      enum: ["user", "admin"],
+      enum: ["user", "admin", "rider"],
       default: "user",
     },
   },
@@ -39,6 +50,8 @@ userSchema.pre("save", async function hashPassword() {
 userSchema.methods.comparePassword = function comparePassword(candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
+
+userSchema.index({ role: 1, isActive: 1, name: 1 });
 
 const User = mongoose.models.User || mongoose.model("User", userSchema);
 export default User;

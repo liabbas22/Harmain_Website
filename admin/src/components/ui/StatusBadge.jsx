@@ -13,6 +13,9 @@ const colors = {
   paid: "bg-emerald-50 text-emerald-700",
   failed: "bg-red-50 text-red-700",
   refunded: "bg-slate-100 text-slate-700",
+  not_required: "bg-slate-100 text-slate-700",
+  processing: "bg-blue-50 text-blue-700",
+  completed: "bg-emerald-50 text-emerald-700",
 };
 
 export default function StatusBadge({ value, label }) {

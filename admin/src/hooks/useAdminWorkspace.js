@@ -5,6 +5,7 @@ export function useAdminWorkspace(token, onUnauthorized) {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [riders, setRiders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const overviewRefreshingRef = useRef(false);
@@ -14,16 +15,18 @@ export function useAdminWorkspace(token, onUnauthorized) {
     setLoading(true);
     setError("");
     try {
-      const [profile, productResult, categoryResult, orderResult] = await Promise.all([
+      const [profile, productResult, categoryResult, orderResult, riderResult] = await Promise.all([
         adminApi.getProfile(token),
         adminApi.getProducts(token),
         adminApi.getCategories(token),
         adminApi.getOrders(token),
+        adminApi.getRiders(token),
       ]);
       if (profile.user?.role !== "admin") throw new Error("Administrator access is required.");
       setProducts(productResult.products || []);
       setCategories(categoryResult || []);
       setOrders(orderResult.orders || []);
+      setRiders(riderResult || []);
     } catch (requestError) {
       if (requestError.status === 401 || requestError.status === 403) onUnauthorized();
       else setError(requestError.message || "Could not load the admin workspace.");
@@ -59,9 +62,11 @@ export function useAdminWorkspace(token, onUnauthorized) {
     products,
     categories,
     orders,
+    riders,
     setProducts,
     setCategories,
     setOrders,
+    setRiders,
     loading,
     error,
     load,

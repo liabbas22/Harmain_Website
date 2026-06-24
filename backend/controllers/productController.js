@@ -10,10 +10,17 @@ export const getProducts = asyncHandler(async (req, res) => {
   const currentPage = Math.max(Number(page), 1);
   const pageSize = Math.min(Math.max(Number(limit), 1), 100);
   const [products, total] = await Promise.all([
-    Product.find(filter).populate("category").sort({ createdAt: -1 }).skip((currentPage - 1) * pageSize).limit(pageSize),
+    Product.find(filter)
+      .populate("category")
+      .sort({ createdAt: -1 })
+      .skip((currentPage - 1) * pageSize)
+      .limit(pageSize),
     Product.countDocuments(filter),
   ]);
-  res.json({ products, pagination: { page: currentPage, limit: pageSize, total } });
+  res.json({
+    products,
+    pagination: { page: currentPage, limit: pageSize, total },
+  });
 });
 
 export const getProductById = asyncHandler(async (req, res) => {
@@ -28,7 +35,10 @@ export const createProduct = asyncHandler(async (req, res) => {
 });
 
 export const updateProduct = asyncHandler(async (req, res) => {
-  const product = await Product.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true }).populate("category");
+  const product = await Product.findByIdAndUpdate(req.params.id, req.body, {
+    new: true,
+    runValidators: true,
+  }).populate("category");
   if (!product) return res.status(404).json({ message: "Product not found" });
   res.json(product);
 });

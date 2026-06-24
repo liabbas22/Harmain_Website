@@ -11,6 +11,23 @@ export const ORDER_STATUSES = [
 
 export const PAYMENT_STATUSES = ["pending", "paid", "failed", "refunded"];
 
+export const CANCELLATION_REASONS = [
+  ["customer_request", "Customer request"],
+  ["duplicate_order", "Duplicate order"],
+  ["unavailable_items", "Items unavailable"],
+  ["delivery_issue", "Delivery issue"],
+  ["payment_issue", "Payment issue"],
+  ["other", "Other"],
+];
+
+export const REFUND_STATUSES = [
+  ["not_required", "Not required"],
+  ["pending", "Pending"],
+  ["processing", "Processing"],
+  ["completed", "Completed"],
+  ["failed", "Failed"],
+];
+
 export const ORDER_FILTERS = [
   ["all", "All orders"],
   ["today", "Today"],
@@ -25,6 +42,7 @@ export const navigationItems = [
   ["products", "Products"],
   ["categories", "Categories"],
   ["orders", "Orders"],
+  ["riders", "Delivery team"],
 ];
 
 export const emptyProduct = (category = "") => ({
@@ -43,5 +61,13 @@ export const emptyCategory = {
   name: "",
   description: "",
   image: "",
+  isActive: true,
+};
+
+export const emptyRider = {
+  name: "",
+  email: "",
+  phone: "",
+  password: "",
   isActive: true,
 };

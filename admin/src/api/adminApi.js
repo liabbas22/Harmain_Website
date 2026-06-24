@@ -26,6 +26,9 @@ export const adminApi = {
   getProducts: (token) => request("/products?limit=100", { token }),
   getCategories: (token) => request("/categories?all=true", { token }),
   getOrders: (token, filter = "all") => request(`/orders?limit=100&filter=${encodeURIComponent(filter)}`, { token }),
+  getRiders: (token) => request("/auth/admin/riders", { token }),
+  createRider: (body, token) => request("/auth/admin/riders", { method: "POST", body, token }),
+  updateRider: (id, body, token) => request(`/auth/admin/riders/${id}`, { method: "PATCH", body, token }),
   saveProduct: (id, body, token) =>
     request(id ? `/products/${id}` : "/products", {
       method: id ? "PATCH" : "POST",
@@ -44,4 +47,6 @@ export const adminApi = {
     request(`/categories/${id}`, { method: "DELETE", token }),
   updateOrder: (id, body, token) =>
     request(`/orders/${id}/status`, { method: "PATCH", body, token }),
+  assignRider: (id, riderId, token) =>
+    request(`/orders/${id}/rider`, { method: "PATCH", body: { riderId: riderId || null }, token }),
 };

@@ -2,7 +2,9 @@ import Category from "../models/Category.js";
 import asyncHandler from "../utils/asyncHandler.js";
 
 export const getCategories = asyncHandler(async (req, res) => {
-  const categories = await Category.find(req.query.all === "true" ? {} : { isActive: true });
+  const categories = await Category.find(
+    req.query.all === "true" ? {} : { isActive: true },
+  );
   res.json(categories);
 });
 
@@ -12,7 +14,10 @@ export const createCategory = asyncHandler(async (req, res) => {
 });
 
 export const updateCategory = asyncHandler(async (req, res) => {
-  const category = await Category.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+  const category = await Category.findByIdAndUpdate(req.params.id, req.body, {
+    new: true,
+    runValidators: true,
+  });
   if (!category) return res.status(404).json({ message: "Category not found" });
   res.json(category);
 });
