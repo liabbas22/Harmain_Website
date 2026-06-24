@@ -30,14 +30,14 @@ export default function CartDrawer({ onClose }) {
     window.addEventListener("harmain-cart-updated", refresh);
     return () => window.removeEventListener("harmain-cart-updated", refresh);
   }, []);
-  const change = async (id, quantity, optionName = "") => {
-    if (quantity < 1) return remove(id, optionName);
-    await api.patch(`/cart/${id}`, { quantity, optionName });
+  const change = async (id, quantity, optionName = "", specialInstructions = "") => {
+    if (quantity < 1) return remove(id, optionName, specialInstructions);
+    await api.patch(`/cart/${id}`, { quantity, optionName, specialInstructions });
     await load();
     window.dispatchEvent(new Event("harmain-cart-updated"));
   };
-  const remove = async (id, optionName = "") => {
-    await api.delete(`/cart/${id}`, { params: { optionName } });
+  const remove = async (id, optionName = "", specialInstructions = "") => {
+    await api.delete(`/cart/${id}`, { params: { optionName, specialInstructions } });
     await load();
     window.dispatchEvent(new Event("harmain-cart-updated"));
   };
@@ -87,10 +87,10 @@ export default function CartDrawer({ onClose }) {
         ) : (
           <div className="space-y-3">
             {items?.map(
-              ({ product, quantity, unitPrice, optionName }) =>
+              ({ product, quantity, unitPrice, optionName, specialInstructions }) =>
                 product && (
                   <article
-                    key={`${product._id}-${optionName || "regular"}`}
+                    key={`${product._id}-${optionName || "regular"}-${specialInstructions || "no-note"}`}
                     className="flex gap-3 p-3 bg-white border border-red-100 shadow-sm rounded-2xl"
                   >
                     <div className="w-16 h-16 overflow-hidden shrink-0 rounded-xl bg-red-50">
@@ -113,12 +113,13 @@ export default function CartDrawer({ onClose }) {
                               {optionName}
                             </p>
                           )}
+                          {specialInstructions && <p className="mt-0.5 text-xs text-gray-500 line-clamp-1">Note: {specialInstructions}</p>}
                           <p className="mt-1 text-sm font-bold text-red-700">
                             Rs. {unitPrice ?? product.price}
                           </p>
                         </div>
                         <button
-                          onClick={() => remove(product._id, optionName)}
+                          onClick={() => remove(product._id, optionName, specialInstructions)}
                           className="flex items-center justify-center w-8 h-8 text-center text-red-600 transition rounded-full hover:bg-red-50"
                         >
                           <FaTrash size={13} />
@@ -127,14 +128,14 @@ export default function CartDrawer({ onClose }) {
                       <div className="flex items-center justify-between mt-2">
                         <div className="flex items-center border border-red-100 rounded-lg bg-red-50">
                           <button
-                            onClick={() => change(product._id, quantity - 1, optionName)}
+                            onClick={() => change(product._id, quantity - 1, optionName, specialInstructions)}
                             className="p-2 text-red-700"
                           >
                             <FaMinus size={10} />
                           </button>
                           <b className="text-sm text-center w-7">{quantity}</b>
                           <button
-                            onClick={() => change(product._id, quantity + 1, optionName)}
+                            onClick={() => change(product._id, quantity + 1, optionName, specialInstructions)}
                             className="p-2 text-red-700"
                           >
                             <FaPlus size={10} />

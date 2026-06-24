@@ -7,10 +7,14 @@ const CategoryCard = ({ item }) => {
   const [modalAnimation, setModalAnimation] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [selectedOption, setSelectedOption] = useState(item?.options?.[0]);
+  const [specialInstructions, setSpecialInstructions] = useState("");
   const [toast, setToast] = useState(false);
   const isAvailable = item?.isAvailable !== false;
 
   const handleOpenModal = () => {
+    setQuantity(1);
+    setSelectedOption(item?.options?.[0]);
+    setSpecialInstructions("");
     setModelVisible(true);
 
     setTimeout(() => {
@@ -25,12 +29,12 @@ const CategoryCard = ({ item }) => {
       setModelVisible(false);
     }, 300);
   };
-  const addToCart = async (event, quantity = 1, selectedOption = item?.options?.[0]) => {
+  const addToCart = async (event, quantity = 1, selectedOption = item?.options?.[0], instructions = "") => {
     event?.stopPropagation();
     if (!isAvailable) return;
     if (!localStorage.getItem("harmain_token")) return window.location.assign("/login");
     try {
-      await api.post("/cart", { productId: item.id, quantity, optionName: selectedOption?.name || "" });
+      await api.post("/cart", { productId: item.id, quantity, optionName: selectedOption?.name || "", specialInstructions: instructions });
       window.dispatchEvent(new Event("harmain-cart-updated"));
       handleCloseModal();
       setToast(true);
@@ -123,10 +127,12 @@ const CategoryCard = ({ item }) => {
           item={item}
           setQuantity={setQuantity}
           quantity={quantity}
+          specialInstructions={specialInstructions}
+          setSpecialInstructions={setSpecialInstructions}
           handleCloseModal={handleCloseModal}
           selectedOption={selectedOption}
           setSelectedOption={setSelectedOption}
-          onAddToCart={() => addToCart(null, quantity, selectedOption)}
+          onAddToCart={() => addToCart(null, quantity, selectedOption, specialInstructions)}
         />
       )}
     </>

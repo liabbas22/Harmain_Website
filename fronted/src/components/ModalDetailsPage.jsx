@@ -11,6 +11,8 @@ const ModalDetailsPage = ({
   setSelectedOption,
   quantity,
   setQuantity,
+  specialInstructions,
+  setSpecialInstructions,
   onAddToCart,
 }) => {
   const isAvailable = item?.isAvailable !== false;
@@ -160,6 +162,9 @@ const ModalDetailsPage = ({
                 </h3>
 
                 <textarea
+                  value={specialInstructions}
+                  onChange={(event) => setSpecialInstructions(event.target.value)}
+                  maxLength={500}
                   placeholder="Please enter instructions about this item"
                   className="w-full p-2 md:p-3 font-sans text-[16px] border-2 border-gray-200 resize-none h-28 rounded-2xl focus:outline-none focus:ring-2 focus:ring-red-500"
                 ></textarea>
