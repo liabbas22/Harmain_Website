@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
-import { FiCheckCircle, FiMapPin, FiPhone, FiUser } from "react-icons/fi";
+import { FiCheckCircle, FiMapPin, FiPhone, FiTag, FiUser, FiX } from "react-icons/fi";
 import api, { apiError } from "../api";
 
 const MINIMUM_ORDER = 500;
@@ -39,6 +39,10 @@ export default function Checkout() {
   const [errors, setErrors] = useState({});
   const [status, setStatus] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [couponMessage, setCouponMessage] = useState("");
+  const [applyingCoupon, setApplyingCoupon] = useState(false);
   useEffect(() => {
     api
       .get("/cart")
@@ -53,6 +57,8 @@ export default function Checkout() {
       sum + (item.unitPrice ?? item.product?.price ?? 0) * item.quantity,
     0,
   );
+  const discount = appliedCoupon?.discount || 0;
+  const grandTotal = Math.max(0, total - discount);
   const canPlaceOrder = total >= MINIMUM_ORDER;
   const update = (name) => (event) =>
     setForm({ ...form, [name]: event.target.value });
@@ -68,6 +74,35 @@ export default function Checkout() {
     setErrors(next);
     return !Object.keys(next).length;
   };
+  const applyCoupon = async () => {
+    const code = couponCode.trim();
+    if (!code) {
+      setCouponMessage("Enter a coupon code first.");
+      return;
+    }
+
+    setApplyingCoupon(true);
+    setCouponMessage("");
+    try {
+      const { data } = await api.post("/coupons/validate", {
+        code,
+        subtotal: total,
+      });
+      setAppliedCoupon(data);
+      setCouponCode(data.coupon.code);
+      setCouponMessage(`${data.coupon.code} applied. You saved Rs. ${data.discount}.`);
+    } catch (error) {
+      setAppliedCoupon(null);
+      setCouponMessage(apiError(error));
+    } finally {
+      setApplyingCoupon(false);
+    }
+  };
+  const removeCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponCode("");
+    setCouponMessage("");
+  };
   const submit = async (event) => {
     event.preventDefault();
     if (!canPlaceOrder) {
@@ -81,6 +116,7 @@ export default function Checkout() {
       const { data } = await api.post("/orders/checkout", {
         paymentMethod: "cash_on_delivery",
         deliveryAddress: form,
+        couponCode: appliedCoupon?.coupon?.code || "",
       });
       setStatus(
         `Order #${data._id.slice(-6).toUpperCase()} placed successfully.`,
@@ -233,9 +269,34 @@ export default function Checkout() {
                   ),
               )}
             </div>
-            <div className="flex justify-between mt-4 text-base font-extrabold">
+            <section className="mt-5 rounded-xl border border-red-100 bg-red-50/60 p-3">
+              <div className="flex items-center gap-2 text-sm font-extrabold text-gray-900">
+                <FiTag className="text-red-700" />
+                Coupon code
+              </div>
+              {appliedCoupon ? (
+                <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-green-200 bg-white px-3 py-2">
+                  <div className="min-w-0">
+                    <b className="block text-sm text-green-700">{appliedCoupon.coupon.code}</b>
+                    <span className="block text-xs text-gray-500">You save Rs. {appliedCoupon.discount}</span>
+                  </div>
+                  <button type="button" onClick={removeCoupon} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-red-700 hover:bg-red-50" title="Remove coupon" aria-label="Remove coupon"><FiX /></button>
+                </div>
+              ) : (
+                <div className="mt-3 flex gap-2">
+                  <input value={couponCode} onChange={(event) => { setCouponCode(event.target.value.toUpperCase()); setCouponMessage(""); }} placeholder="e.g. WELCOME10" className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold uppercase outline-none focus:border-red-500 focus:ring-4 focus:ring-red-100" />
+                  <button type="button" onClick={applyCoupon} disabled={applyingCoupon || !items.length} className="rounded-lg bg-red-700 px-3 text-xs font-extrabold text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-60">{applyingCoupon ? "Checking..." : "Apply"}</button>
+                </div>
+              )}
+              {!appliedCoupon && couponMessage && <p className="mt-2 text-xs font-semibold text-red-700">{couponMessage}</p>}
+            </section>
+            <div className="mt-5 space-y-3 text-sm">
+              <div className="flex justify-between text-gray-600"><span>Subtotal</span><b className="text-gray-900">Rs. {total}</b></div>
+              {discount > 0 && <div className="flex justify-between text-green-700"><span>Coupon discount</span><b>- Rs. {discount}</b></div>}
+            </div>
+            <div className="flex justify-between pt-4 mt-4 text-base font-extrabold border-t border-red-100">
               <span>Grand Total</span>
-              <span>Rs. {total}</span>
+              <span>Rs. {grandTotal}</span>
             </div>
           </aside>
         </div>

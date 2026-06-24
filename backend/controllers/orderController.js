@@ -1,9 +1,11 @@
 import mongoose from "mongoose";
 import Cart from "../models/Cart.js";
+import Coupon from "../models/Coupon.js";
 import Order from "../models/Order.js";
 import Product from "../models/Product.js";
 import User from "../models/User.js";
 import asyncHandler from "../utils/asyncHandler.js";
+import { claimCouponUsage, couponSnapshot, validateCoupon } from "../utils/couponService.js";
 import { emitStockAlert } from "../utils/stockAlerts.js";
 
 const statuses = [
@@ -118,7 +120,7 @@ const emitOrderEvent = (req, event, order) =>
     .emit(event, { order: order.toObject() });
 
 export const checkout = asyncHandler(async (req, res) => {
-  const { deliveryAddress, paymentMethod = "cash_on_delivery" } = req.body;
+  const { deliveryAddress, paymentMethod = "cash_on_delivery", couponCode = "" } = req.body;
   if (
     !deliveryAddress?.fullName ||
     !deliveryAddress?.phone ||
@@ -178,16 +180,36 @@ export const checkout = asyncHandler(async (req, res) => {
       .status(400)
       .json({ message: `Minimum order amount is Rs. ${MINIMUM_ORDER_AMOUNT}` });
 
+  const couponResult = couponCode?.trim()
+    ? await validateCoupon({ code: couponCode, subtotal, userId: req.user._id })
+    : null;
+  const discount = couponResult?.discount || 0;
   const deliveryFee = Number(process.env.DELIVERY_FEE || 0);
-  const order = await Order.create({
-    user: req.user._id,
-    items,
-    deliveryAddress,
-    paymentMethod,
-    subtotal,
-    deliveryFee,
-    total: subtotal + deliveryFee,
-  });
+  if (couponResult) await claimCouponUsage(couponResult.coupon);
+
+  let order;
+  try {
+    order = await Order.create({
+      user: req.user._id,
+      items,
+      deliveryAddress,
+      paymentMethod,
+      subtotal,
+      coupon: couponResult
+        ? couponSnapshot(couponResult.coupon, discount)
+        : undefined,
+      discount,
+      deliveryFee,
+      total: Math.max(0, subtotal - discount + deliveryFee),
+    });
+  } catch (error) {
+    if (couponResult)
+      await Coupon.updateOne(
+        { _id: couponResult.coupon._id, usedCount: { $gt: 0 } },
+        { $inc: { usedCount: -1 } },
+      );
+    throw error;
+  }
   const requestedProducts = [...requestedByProduct.values()];
   const updatedProducts = await Promise.all(
     requestedProducts.map(({ product, quantity }) =>

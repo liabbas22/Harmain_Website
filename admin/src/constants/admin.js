@@ -42,6 +42,7 @@ export const navigationItems = [
   ["products", "Products"],
   ["categories", "Categories"],
   ["orders", "Orders"],
+  ["coupons", "Coupons"],
   ["riders", "Delivery team"],
 ];
 
@@ -69,5 +70,19 @@ export const emptyRider = {
   email: "",
   phone: "",
   password: "",
+  isActive: true,
+};
+
+export const emptyCoupon = {
+  code: "",
+  description: "",
+  discountType: "percentage",
+  value: "",
+  minimumOrder: "0",
+  maxDiscount: "",
+  usageLimit: "0",
+  perUserLimit: "1",
+  startsAt: "",
+  expiresAt: "",
   isActive: true,
 };

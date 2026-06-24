@@ -49,7 +49,7 @@ export default function OrderTable({
                 onOpenOrder?.(order);
               }
             }}
-            className={`text-sm transition border-b outline-none cursor-pointer border-slate-100 text-slate-700 focus:ring-2 focus:ring-inset focus:ring-brand-600 ${unreadOrderIds.has(order._id) ? "bg-red-50 hover:bg-red-100 focus:bg-red-100" : "hover:bg-red-50 focus:bg-red-50"}`}
+            className={`text-sm transition border-b outline-none cursor-pointer border-slate-100 text-slate-700 focus:ring-2 focus:ring-inset focus:ring-brand-600 ${unreadOrderIds.has(order._id) ? "bg-yellow-50 hover:bg-red-100 focus:bg-red-100" : "hover:bg-red-50 focus:bg-red-50"}`}
           >
             <td className="px-4 py-3 font-extrabold text-slate-800">
               {shortId(order._id)}
