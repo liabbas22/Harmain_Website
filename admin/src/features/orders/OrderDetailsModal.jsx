@@ -215,7 +215,7 @@ export default function OrderDetailsModal({
         <section className="ml-auto mt-5 grid w-full max-w-[280px] grid-cols-[1fr_auto] gap-x-6 gap-y-3 border-t border-slate-200 pt-4 text-sm text-slate-500">
           <span>Subtotal</span>
           <b className="text-right text-slate-800">{money(order.subtotal)}</b>
-          {Number(order.discount) > 0 && <><span>Coupon {order.coupon?.code ? `(${order.coupon.code})` : "discount"}</span><b className="text-right text-emerald-700">- {money(order.discount)}</b></>}
+          {Number(order.discount) > 0 && <><span>{order.coupon?.code ? `Coupon (${order.coupon.code})` : order.offer?.name ? `Offer (${order.offer.name})` : "Discount"}</span><b className="text-right text-emerald-700">- {money(order.discount)}</b></>}
           <span>Delivery fee</span>
           <b className="text-right text-slate-800">
             {money(order.deliveryFee)}

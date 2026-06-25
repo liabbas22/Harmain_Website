@@ -40,7 +40,7 @@ export default function Checkout() {
   const [status, setStatus] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [couponCode, setCouponCode] = useState("");
-  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [discountQuote, setDiscountQuote] = useState(null);
   const [couponMessage, setCouponMessage] = useState("");
   const [applyingCoupon, setApplyingCoupon] = useState(false);
   useEffect(() => {
@@ -49,6 +49,16 @@ export default function Checkout() {
       .then(({ data }) => setCart(data))
       .catch(() => setStatus("Please sign in again to continue."));
   }, []);
+  useEffect(() => {
+    if (!cart?.items?.length) {
+      setDiscountQuote(null);
+      return;
+    }
+    api
+      .post("/offers/quote", { couponCode: "" })
+      .then(({ data }) => setDiscountQuote(data))
+      .catch(() => setDiscountQuote(null));
+  }, [cart]);
   if (!localStorage.getItem("harmain_token"))
     return <Navigate to="/login" replace />;
   const items = cart?.items || [];
@@ -57,7 +67,8 @@ export default function Checkout() {
       sum + (item.unitPrice ?? item.product?.price ?? 0) * item.quantity,
     0,
   );
-  const discount = appliedCoupon?.discount || 0;
+  const appliedDiscount = discountQuote?.applied;
+  const discount = appliedDiscount?.discount || 0;
   const grandTotal = Math.max(0, total - discount);
   const canPlaceOrder = total >= MINIMUM_ORDER;
   const update = (name) => (event) =>
@@ -84,24 +95,29 @@ export default function Checkout() {
     setApplyingCoupon(true);
     setCouponMessage("");
     try {
-      const { data } = await api.post("/coupons/validate", {
-        code,
-        subtotal: total,
-      });
-      setAppliedCoupon(data);
-      setCouponCode(data.coupon.code);
-      setCouponMessage(`${data.coupon.code} applied. You saved Rs. ${data.discount}.`);
+      const { data } = await api.post("/offers/quote", { couponCode: code });
+      setDiscountQuote(data);
+      setCouponCode(code);
+      setCouponMessage(
+        data.applied?.type === "coupon"
+          ? `${data.applied.label} applied. You saved Rs. ${data.applied.discount}.`
+          : data.automaticOffer
+            ? `${data.automaticOffer.name} gives the better saving of Rs. ${data.applied?.discount || 0}.`
+            : "No discount is available for this order.",
+      );
     } catch (error) {
-      setAppliedCoupon(null);
       setCouponMessage(apiError(error));
     } finally {
       setApplyingCoupon(false);
     }
   };
   const removeCoupon = () => {
-    setAppliedCoupon(null);
     setCouponCode("");
     setCouponMessage("");
+    api
+      .post("/offers/quote", { couponCode: "" })
+      .then(({ data }) => setDiscountQuote(data))
+      .catch(() => setDiscountQuote(null));
   };
   const submit = async (event) => {
     event.preventDefault();
@@ -116,7 +132,7 @@ export default function Checkout() {
       const { data } = await api.post("/orders/checkout", {
         paymentMethod: "cash_on_delivery",
         deliveryAddress: form,
-        couponCode: appliedCoupon?.coupon?.code || "",
+        couponCode: appliedDiscount?.type === "coupon" ? couponCode : "",
       });
       setStatus(
         `Order #${data._id.slice(-6).toUpperCase()} placed successfully.`,
@@ -274,11 +290,11 @@ export default function Checkout() {
                 <FiTag className="text-red-700" />
                 Coupon code
               </div>
-              {appliedCoupon ? (
+              {appliedDiscount?.type === "coupon" ? (
                 <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-green-200 bg-white px-3 py-2">
                   <div className="min-w-0">
-                    <b className="block text-sm text-green-700">{appliedCoupon.coupon.code}</b>
-                    <span className="block text-xs text-gray-500">You save Rs. {appliedCoupon.discount}</span>
+                    <b className="block text-sm text-green-700">{appliedDiscount.label}</b>
+                    <span className="block text-xs text-gray-500">You save Rs. {appliedDiscount.discount}</span>
                   </div>
                   <button type="button" onClick={removeCoupon} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-red-700 hover:bg-red-50" title="Remove coupon" aria-label="Remove coupon"><FiX /></button>
                 </div>
@@ -288,11 +304,12 @@ export default function Checkout() {
                   <button type="button" onClick={applyCoupon} disabled={applyingCoupon || !items.length} className="rounded-lg bg-red-700 px-3 text-xs font-extrabold text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-60">{applyingCoupon ? "Checking..." : "Apply"}</button>
                 </div>
               )}
-              {!appliedCoupon && couponMessage && <p className="mt-2 text-xs font-semibold text-red-700">{couponMessage}</p>}
+              {discountQuote?.automaticOffer && <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2"><b className="block text-xs text-amber-800">Automatic offer: {discountQuote.automaticOffer.name}</b><span className="mt-1 block text-xs text-amber-700">Save Rs. {discountQuote.automaticOffer.discount} when this offer gives the best value.</span></div>}
+              {couponMessage && <p className={`mt-2 text-xs font-semibold ${couponMessage.includes("applied") || couponMessage.includes("better saving") ? "text-green-700" : "text-red-700"}`}>{couponMessage}</p>}
             </section>
             <div className="mt-5 space-y-3 text-sm">
               <div className="flex justify-between text-gray-600"><span>Subtotal</span><b className="text-gray-900">Rs. {total}</b></div>
-              {discount > 0 && <div className="flex justify-between text-green-700"><span>Coupon discount</span><b>- Rs. {discount}</b></div>}
+              {discount > 0 && <div className="flex justify-between text-green-700"><span>{appliedDiscount?.type === "coupon" ? "Coupon discount" : "Automatic offer"}</span><b>- Rs. {discount}</b></div>}
             </div>
             <div className="flex justify-between pt-4 mt-4 text-base font-extrabold border-t border-red-100">
               <span>Grand Total</span>

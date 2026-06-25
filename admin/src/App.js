@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { adminApi } from "./api/adminApi";
-import { emptyCategory, emptyCoupon, emptyProduct, emptyRider } from "./constants/admin";
+import { emptyCategory, emptyCoupon, emptyOffer, emptyProduct, emptyRider } from "./constants/admin";
 import AdminShell from "./components/layout/AdminShell";
 import ConfirmDialog from "./components/ui/ConfirmDialog";
 import Toast from "./components/ui/Toast";
@@ -9,6 +9,8 @@ import CategoriesPage from "./features/categories/CategoriesPage";
 import CategoryEditor from "./features/categories/CategoryEditor";
 import CouponEditor from "./features/coupons/CouponEditor";
 import CouponsPage from "./features/coupons/CouponsPage";
+import OfferEditor from "./features/offers/OfferEditor";
+import OffersPage from "./features/offers/OffersPage";
 import OverviewPage from "./features/dashboard/OverviewPage";
 import CancelOrderModal from "./features/orders/CancelOrderModal";
 import OrdersPage from "./features/orders/OrdersPage";
@@ -109,6 +111,43 @@ const createCouponPayload = (values) => ({
   expiresAt: values.expiresAt ? new Date(values.expiresAt).toISOString() : null,
 });
 
+const toOfferEditor = (offer) => ({
+  id: offer._id,
+  values: {
+    ...emptyOffer,
+    ...offer,
+    category: offer.category?._id || offer.category || "",
+    products: (offer.products || []).map((product) => product._id || product),
+    value: String(offer.value ?? ""),
+    minimumOrder: String(offer.minimumOrder ?? 0),
+    maxDiscount: offer.maxDiscount ?? "",
+    priority: String(offer.priority ?? 0),
+    startsAt: toDateTimeInput(offer.startsAt),
+    expiresAt: toDateTimeInput(offer.expiresAt),
+  },
+});
+
+const createOfferPayload = (values) => ({
+  name: values.name.trim(),
+  description: values.description.trim(),
+  discountType: values.discountType,
+  value: Number(values.value),
+  appliesTo: values.appliesTo,
+  category: values.appliesTo === "category" ? values.category : null,
+  products: values.appliesTo === "products" ? values.products : [],
+  minimumOrder: Number(values.minimumOrder || 0),
+  maxDiscount:
+    values.discountType === "percentage" && values.maxDiscount !== ""
+      ? Number(values.maxDiscount)
+      : null,
+  priority: Number(values.priority || 0),
+  isActive: values.isActive,
+  startsAt: values.startsAt
+    ? new Date(values.startsAt).toISOString()
+    : new Date().toISOString(),
+  expiresAt: values.expiresAt ? new Date(values.expiresAt).toISOString() : null,
+});
+
 function App() {
   const [session, setSession] = useState(readAdminSession);
   const [view, setView] = useState("overview");
@@ -119,6 +158,7 @@ function App() {
   const [categoryEditor, setCategoryEditor] = useState(null);
   const [riderEditor, setRiderEditor] = useState(null);
   const [couponEditor, setCouponEditor] = useState(null);
+  const [offerEditor, setOfferEditor] = useState(null);
   const [confirmation, setConfirmation] = useState(null);
   const [cancelEditor, setCancelEditor] = useState(null);
   const [orderDetails, setOrderDetails] = useState(null);
@@ -132,6 +172,8 @@ function App() {
   const [unreadOrdersOwner, setUnreadOrdersOwner] = useState(null);
   const [coupons, setCoupons] = useState([]);
   const [couponsLoading, setCouponsLoading] = useState(false);
+  const [offers, setOffers] = useState([]);
+  const [offersLoading, setOffersLoading] = useState(false);
   const orderRequestRef = useRef(0);
 
   const logout = useCallback(() => {
@@ -141,12 +183,14 @@ function App() {
     setCategoryEditor(null);
     setRiderEditor(null);
     setCouponEditor(null);
+    setOfferEditor(null);
     setConfirmation(null);
     setCancelEditor(null);
     setOrderDetails(null);
     setUnreadOrderIds(new Set());
     setUnreadOrdersOwner(null);
     setCoupons([]);
+    setOffers([]);
   }, []);
 
   const notify = useCallback((message, type = "success") => setToast({ message, type, id: Date.now() }), []);
@@ -170,6 +214,23 @@ function App() {
   useEffect(() => {
     loadCoupons();
   }, [loadCoupons]);
+
+  const loadOffers = useCallback(async () => {
+    if (!session?.token) return;
+    setOffersLoading(true);
+    try {
+      setOffers(await adminApi.getOffers(session.token));
+    } catch (requestError) {
+      if (requestError.status === 401 || requestError.status === 403) logout();
+      else notify(requestError.message || "Could not load offers.", "error");
+    } finally {
+      setOffersLoading(false);
+    }
+  }, [logout, notify, session?.token]);
+
+  useEffect(() => {
+    loadOffers();
+  }, [loadOffers]);
 
   const loadFilteredOrders = useCallback(async (filter) => {
     if (!session?.token) return;
@@ -281,6 +342,22 @@ function App() {
   }, [couponEditor, loadCoupons, view]);
 
   useEffect(() => {
+    if (view !== "offers" || offerEditor) return undefined;
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") loadOffers();
+    };
+
+    const interval = window.setInterval(refreshWhenVisible, 60000);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [loadOffers, offerEditor, view]);
+
+  useEffect(() => {
     if (view === "orders") loadFilteredOrders(orderFilter);
   }, [loadFilteredOrders, orderFilter, view]);
 
@@ -362,6 +439,23 @@ function App() {
     }
   };
 
+  const saveOffer = async (event) => {
+    event.preventDefault();
+    const editor = offerEditor;
+    const payload = createOfferPayload(editor.values);
+    setBusyAction("offer-save");
+    try {
+      await adminApi.saveOffer(editor.id, payload, session.token);
+      setOfferEditor(null);
+      notify(editor.id ? "Offer updated." : "Offer created.");
+      await loadOffers();
+    } catch (requestError) {
+      notify(requestError.message || "Offer could not be saved.", "error");
+    } finally {
+      setBusyAction("");
+    }
+  };
+
   const saveCategory = async (event) => {
     event.preventDefault();
     const editor = categoryEditor;
@@ -408,13 +502,16 @@ function App() {
     setConfirmation(null);
     const isProduct = item.entity === "product";
     const isCoupon = item.entity === "coupon";
+    const isOffer = item.entity === "offer";
     setBusyAction(`${item.entity}-${item.record._id}`);
     try {
       if (isProduct) await adminApi.deleteProduct(item.record._id, session.token);
       else if (isCoupon) await adminApi.deleteCoupon(item.record._id, session.token);
+      else if (isOffer) await adminApi.deleteOffer(item.record._id, session.token);
       else await adminApi.deleteCategory(item.record._id, session.token);
-      notify(isProduct ? "Product deleted." : isCoupon ? "Coupon deleted." : "Category deleted.");
+      notify(isProduct ? "Product deleted." : isCoupon ? "Coupon deleted." : isOffer ? "Offer deleted." : "Category deleted.");
       if (isCoupon) await loadCoupons();
+      else if (isOffer) await loadOffers();
       else await load();
     } catch (requestError) {
       notify(requestError.message || "Item could not be deleted.", "error");
@@ -471,11 +568,11 @@ function App() {
     entity,
     record,
     title: `Delete ${entity === "coupon" ? record.code : record.name}?`,
-    message: entity === "product" ? "This product will be permanently removed from the menu and cannot be recovered." : entity === "coupon" ? "This coupon will no longer be available at checkout. This action cannot be undone." : "Delete this category only after its products have been reassigned. This action cannot be undone.",
+    message: entity === "product" ? "This product will be permanently removed from the menu and cannot be recovered." : entity === "coupon" ? "This coupon will no longer be available at checkout. This action cannot be undone." : entity === "offer" ? "This automatic offer will no longer be available at checkout. This action cannot be undone." : "Delete this category only after its products have been reassigned. This action cannot be undone.",
   });
 
-  const viewLoading = view === "orders" ? ordersLoading : view === "coupons" ? couponsLoading : loading;
-  const refreshView = view === "orders" ? () => loadFilteredOrders(orderFilter) : view === "coupons" ? loadCoupons : load;
+  const viewLoading = view === "orders" ? ordersLoading : view === "coupons" ? couponsLoading : view === "offers" ? offersLoading : loading;
+  const refreshView = view === "orders" ? () => loadFilteredOrders(orderFilter) : view === "coupons" ? loadCoupons : view === "offers" ? loadOffers : load;
 
   return (
     <>
@@ -486,11 +583,13 @@ function App() {
         {view === "categories" && <CategoriesPage categories={categories} products={products} onNew={() => setCategoryEditor({ id: null, values: emptyCategory })} onEdit={(category) => setCategoryEditor({ id: category._id, values: { ...emptyCategory, ...category } })} onDelete={(category) => requestDelete("category", category)} busyAction={busyAction} />}
         {view === "orders" && <OrdersPage orders={filteredOrders} total={filteredOrdersTotal} filter={orderFilter} unreadOrderIds={unreadOrderIds} onMarkOrderRead={markOrderRead} onFilterChange={setOrderFilter} onUpdate={updateOrder} onCancel={(order) => setCancelEditor({ order })} onOpenOrder={setOrderDetails} busyAction={busyAction} loading={ordersLoading} error={ordersError} />}
         {view === "coupons" && <CouponsPage coupons={coupons} onNew={() => setCouponEditor({ id: null, values: { ...emptyCoupon, startsAt: toDateTimeInput(new Date()) } })} onEdit={(coupon) => setCouponEditor(toCouponEditor(coupon))} onDelete={(coupon) => requestDelete("coupon", coupon)} busyAction={busyAction} />}
+        {view === "offers" && <OffersPage offers={offers} onNew={() => setOfferEditor({ id: null, values: { ...emptyOffer, startsAt: toDateTimeInput(new Date()) } })} onEdit={(offer) => setOfferEditor(toOfferEditor(offer))} onDelete={(offer) => requestDelete("offer", offer)} busyAction={busyAction} />}
         {view === "riders" && <RidersPage riders={riders} onNew={() => setRiderEditor({ id: null, values: emptyRider })} onEdit={(rider) => setRiderEditor({ id: rider._id, values: { ...emptyRider, ...rider, password: "" } })} />}
       </AdminShell>
       {productEditor && <ProductEditor editor={productEditor} categories={categories} onChange={setProductEditor} onClose={() => setProductEditor(null)} onSave={saveProduct} busy={busyAction === "product-save"} />}
       {categoryEditor && <CategoryEditor editor={categoryEditor} onChange={setCategoryEditor} onClose={() => setCategoryEditor(null)} onSave={saveCategory} busy={busyAction === "category-save"} />}
       {couponEditor && <CouponEditor editor={couponEditor} onChange={setCouponEditor} onClose={() => setCouponEditor(null)} onSave={saveCoupon} busy={busyAction === "coupon-save"} />}
+      {offerEditor && <OfferEditor editor={offerEditor} categories={categories} products={products} onChange={setOfferEditor} onClose={() => setOfferEditor(null)} onSave={saveOffer} busy={busyAction === "offer-save"} />}
       {riderEditor && <RiderEditor editor={riderEditor} onChange={setRiderEditor} onClose={() => setRiderEditor(null)} onSave={saveRider} busy={busyAction === "rider-save"} />}
       {cancelEditor && <CancelOrderModal order={cancelEditor.order} onClose={() => setCancelEditor(null)} onConfirm={saveCancellation} busy={busyAction === `order-${cancelEditor.order._id}`} />}
       {confirmation && <ConfirmDialog title={confirmation.title} message={confirmation.message} onCancel={() => setConfirmation(null)} onConfirm={confirmDelete} />}

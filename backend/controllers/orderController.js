@@ -5,7 +5,8 @@ import Order from "../models/Order.js";
 import Product from "../models/Product.js";
 import User from "../models/User.js";
 import asyncHandler from "../utils/asyncHandler.js";
-import { claimCouponUsage, couponSnapshot, validateCoupon } from "../utils/couponService.js";
+import { claimCouponUsage } from "../utils/couponService.js";
+import { couponSnapshot, offerSnapshot, selectBestDiscount } from "../utils/offerService.js";
 import { emitStockAlert } from "../utils/stockAlerts.js";
 
 const statuses = [
@@ -180,12 +181,10 @@ export const checkout = asyncHandler(async (req, res) => {
       .status(400)
       .json({ message: `Minimum order amount is Rs. ${MINIMUM_ORDER_AMOUNT}` });
 
-  const couponResult = couponCode?.trim()
-    ? await validateCoupon({ code: couponCode, subtotal, userId: req.user._id })
-    : null;
-  const discount = couponResult?.discount || 0;
+  const discountSelection = await selectBestDiscount({ items: cart.items, subtotal, userId: req.user._id, couponCode });
+  const discount = discountSelection.applied?.discount || 0;
   const deliveryFee = Number(process.env.DELIVERY_FEE || 0);
-  if (couponResult) await claimCouponUsage(couponResult.coupon);
+  if (discountSelection.applied?.type === "coupon") await claimCouponUsage(discountSelection.applied.coupon);
 
   let order;
   try {
@@ -195,17 +194,20 @@ export const checkout = asyncHandler(async (req, res) => {
       deliveryAddress,
       paymentMethod,
       subtotal,
-      coupon: couponResult
-        ? couponSnapshot(couponResult.coupon, discount)
+      coupon: discountSelection.applied?.type === "coupon"
+        ? couponSnapshot(discountSelection.applied.coupon, discount)
+        : undefined,
+      offer: discountSelection.applied?.type === "offer"
+        ? offerSnapshot(discountSelection.applied.offer, discount)
         : undefined,
       discount,
       deliveryFee,
       total: Math.max(0, subtotal - discount + deliveryFee),
     });
   } catch (error) {
-    if (couponResult)
+    if (discountSelection.applied?.type === "coupon")
       await Coupon.updateOne(
-        { _id: couponResult.coupon._id, usedCount: { $gt: 0 } },
+        { _id: discountSelection.applied.coupon._id, usedCount: { $gt: 0 } },
         { $inc: { usedCount: -1 } },
       );
     throw error;
