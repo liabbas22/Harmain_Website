@@ -33,6 +33,7 @@ export default function OrderDetailsModal({
   const cancellationLabel = CANCELLATION_REASONS.find(
     ([value]) => value === order.cancellationReason,
   )?.[1];
+  const offerBreakdown = order.offerBreakdown || [];
 
   return (
     <Modal title={shortId(order._id)} onClose={onClose} size="max-w-3xl">
@@ -215,7 +216,18 @@ export default function OrderDetailsModal({
         <section className="ml-auto mt-5 grid w-full max-w-[280px] grid-cols-[1fr_auto] gap-x-6 gap-y-3 border-t border-slate-200 pt-4 text-sm text-slate-500">
           <span>Subtotal</span>
           <b className="text-right text-slate-800">{money(order.subtotal)}</b>
-          {Number(order.discount) > 0 && <><span>{order.coupon?.code ? `Coupon (${order.coupon.code})` : order.offer?.name ? `Offer (${order.offer.name})` : "Discount"}</span><b className="text-right text-emerald-700">- {money(order.discount)}</b></>}
+          {Number(order.discount) > 0 && (
+            <>
+              <span>{order.coupon?.code ? `Coupon (${order.coupon.code})` : order.offer?.name ? `Offer (${order.offer.name})` : "Discount"}</span>
+              <b className="text-right text-emerald-700">- {money(order.discount)}</b>
+              {offerBreakdown.map((detail, index) => (
+                <small className="col-span-2 -mt-1 grid grid-cols-[1fr_auto] gap-3 rounded-md bg-emerald-50 px-2 py-1 text-[11px] font-bold text-emerald-700" key={`${detail.product || detail.productName}-${index}`}>
+                  <span className="truncate">{detail.quantity} x {detail.productName} - {detail.offerName}</span>
+                  <span>- {money(detail.discount)}</span>
+                </small>
+              ))}
+            </>
+          )}
           <span>Delivery fee</span>
           <b className="text-right text-slate-800">
             {money(order.deliveryFee)}

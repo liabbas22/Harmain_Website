@@ -6,7 +6,7 @@ import Product from "../models/Product.js";
 import User from "../models/User.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { claimCouponUsage } from "../utils/couponService.js";
-import { couponSnapshot, offerSnapshot, selectBestDiscount } from "../utils/offerService.js";
+import { couponSnapshot, offerBreakdownSnapshot, offerSnapshot, selectBestDiscount } from "../utils/offerService.js";
 import { emitStockAlert } from "../utils/stockAlerts.js";
 
 const statuses = [
@@ -200,6 +200,9 @@ export const checkout = asyncHandler(async (req, res) => {
       offer: discountSelection.applied?.type === "offer"
         ? offerSnapshot(discountSelection.applied.offer, discount)
         : undefined,
+      offerBreakdown: discountSelection.applied?.type === "offer"
+        ? offerBreakdownSnapshot(discountSelection.applied.details)
+        : [],
       discount,
       deliveryFee,
       total: Math.max(0, subtotal - discount + deliveryFee),

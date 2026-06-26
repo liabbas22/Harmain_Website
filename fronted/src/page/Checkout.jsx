@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
-import { FiCheckCircle, FiMapPin, FiPhone, FiTag, FiUser, FiX } from "react-icons/fi";
+import { FiCheckCircle, FiLoader, FiMapPin, FiPhone, FiTag, FiUser, FiX } from "react-icons/fi";
 import api, { apiError } from "../api";
 
 const MINIMUM_ORDER = 500;
@@ -27,6 +27,34 @@ const Field = ({ label, icon, error, children }) => (
     )}
   </label>
 );
+const formatMoney = (value) => Number(value || 0).toLocaleString("en-PK", { maximumFractionDigits: 2 });
+const detailMatchesItem = (detail, item) =>
+  detail?.productId === String(item.product?._id || item.product || "") &&
+  (detail.optionName || "") === (item.optionName || "");
+const couponMatchesInput = (coupon, code) => coupon?.code && coupon.code === code.trim().toUpperCase();
+const automaticSavingName = (offer) => offer?.label || offer?.name || "Automatic savings";
+const SummarySkeleton = () => (
+  <div className="space-y-3">
+    {[0, 1, 2].map((item) => (
+      <div key={item} className="flex items-center justify-between gap-3">
+        <span className="h-4 w-32 animate-pulse rounded-full bg-red-100" />
+        <span className="h-4 w-16 animate-pulse rounded-full bg-red-100" />
+      </div>
+    ))}
+  </div>
+);
+const CheckingSavings = () => (
+  <section className="mt-5 rounded-xl border border-red-100 bg-red-50/70 px-3 py-3">
+    <div className="flex items-center gap-2 text-xs font-extrabold text-red-700">
+      <FiLoader className="animate-spin" />
+      Checking best savings...
+    </div>
+    <div className="mt-3 space-y-2">
+      <span className="block h-3 w-40 animate-pulse rounded-full bg-red-100" />
+      <span className="block h-3 w-24 animate-pulse rounded-full bg-red-100" />
+    </div>
+  </section>
+);
 
 export default function Checkout() {
   const navigate = useNavigate();
@@ -43,22 +71,49 @@ export default function Checkout() {
   const [discountQuote, setDiscountQuote] = useState(null);
   const [couponMessage, setCouponMessage] = useState("");
   const [applyingCoupon, setApplyingCoupon] = useState(false);
+  const [couponAvailable, setCouponAvailable] = useState(false);
+  const [showCouponForm, setShowCouponForm] = useState(false);
+  const [cartLoading, setCartLoading] = useState(true);
+  const [quoteLoading, setQuoteLoading] = useState(true);
   useEffect(() => {
-    api
-      .get("/cart")
-      .then(({ data }) => setCart(data))
-      .catch(() => setStatus("Please sign in again to continue."));
+    let isMounted = true;
+
+    const loadCheckout = async () => {
+      setCartLoading(true);
+      setQuoteLoading(true);
+      const [cartResult, quoteResult, couponResult] = await Promise.allSettled([
+        api.get("/cart"),
+        api.post("/offers/quote", { couponCode: "" }),
+        api.get("/coupons/availability"),
+      ]);
+
+      if (!isMounted) return;
+
+      if (cartResult.status === "fulfilled") {
+        setCart(cartResult.value.data);
+      } else {
+        setStatus("Please sign in again to continue.");
+      }
+
+      setDiscountQuote(quoteResult.status === "fulfilled" ? quoteResult.value.data : null);
+      setCouponAvailable(couponResult.status === "fulfilled" ? Boolean(couponResult.value.data.available) : false);
+      setCartLoading(false);
+      setQuoteLoading(false);
+    };
+
+    loadCheckout();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
   useEffect(() => {
-    if (!cart?.items?.length) {
+    if (!cartLoading && !cart?.items?.length) {
       setDiscountQuote(null);
+      setQuoteLoading(false);
       return;
     }
-    api
-      .post("/offers/quote", { couponCode: "" })
-      .then(({ data }) => setDiscountQuote(data))
-      .catch(() => setDiscountQuote(null));
-  }, [cart]);
+  }, [cart, cartLoading]);
   if (!localStorage.getItem("harmain_token"))
     return <Navigate to="/login" replace />;
   const items = cart?.items || [];
@@ -70,6 +125,8 @@ export default function Checkout() {
   const appliedDiscount = discountQuote?.applied;
   const discount = appliedDiscount?.discount || 0;
   const grandTotal = Math.max(0, total - discount);
+  const activeOfferDetails = appliedDiscount?.type === "offer" ? appliedDiscount.details || [] : [];
+  const isCheckingSavings = quoteLoading && items.length > 0;
   const canPlaceOrder = total >= MINIMUM_ORDER;
   const update = (name) => (event) =>
     setForm({ ...form, [name]: event.target.value });
@@ -93,6 +150,7 @@ export default function Checkout() {
     }
 
     setApplyingCoupon(true);
+    setQuoteLoading(true);
     setCouponMessage("");
     try {
       const { data } = await api.post("/offers/quote", { couponCode: code });
@@ -100,24 +158,30 @@ export default function Checkout() {
       setCouponCode(code);
       setCouponMessage(
         data.applied?.type === "coupon"
-          ? `${data.applied.label} applied. You saved Rs. ${data.applied.discount}.`
-          : data.automaticOffer
-            ? `${data.automaticOffer.name} gives the better saving of Rs. ${data.applied?.discount || 0}.`
+          ? `${data.applied.label} applied. You saved Rs. ${formatMoney(data.applied.discount)}.`
+          : data.coupon && data.automaticOffer
+            ? `${data.coupon.code} is valid and saves Rs. ${formatMoney(data.coupon.discount)}, but ${automaticSavingName(data.automaticOffer)} saves Rs. ${formatMoney(data.applied?.discount || data.automaticOffer.discount)}. Best discount applied automatically.`
+            : data.automaticOffer
+              ? `${automaticSavingName(data.automaticOffer)} gives the better saving of Rs. ${formatMoney(data.applied?.discount || data.automaticOffer.discount)}.`
             : "No discount is available for this order.",
       );
     } catch (error) {
       setCouponMessage(apiError(error));
     } finally {
       setApplyingCoupon(false);
+      setQuoteLoading(false);
     }
   };
   const removeCoupon = () => {
     setCouponCode("");
     setCouponMessage("");
+    setShowCouponForm(false);
+    setQuoteLoading(true);
     api
       .post("/offers/quote", { couponCode: "" })
       .then(({ data }) => setDiscountQuote(data))
-      .catch(() => setDiscountQuote(null));
+      .catch(() => setDiscountQuote(null))
+      .finally(() => setQuoteLoading(false));
   };
   const submit = async (event) => {
     event.preventDefault();
@@ -253,7 +317,7 @@ export default function Checkout() {
               </p>
             )}
             <button
-              disabled={submitting || !items.length || !canPlaceOrder}
+              disabled={submitting || cartLoading || quoteLoading || !items.length || !canPlaceOrder}
               title={
                 !canPlaceOrder
                   ? `Minimum order is Rs. ${MINIMUM_ORDER}`
@@ -262,7 +326,7 @@ export default function Checkout() {
               className="flex items-center justify-center w-full h-12 gap-2 text-sm font-extrabold text-white bg-red-700 shadow-lg mt-7 rounded-xl shadow-red-700/20 disabled:opacity-60"
             >
               <FiCheckCircle />
-              {submitting ? "Placing order..." : "Place order"}
+              {submitting ? "Placing order..." : quoteLoading ? "Checking savings..." : "Place order"}
             </button>
           </form>
           <aside className="p-6 bg-white shadow-sm h-fit rounded-2xl">
@@ -270,50 +334,107 @@ export default function Checkout() {
               Order summary
             </h2>
             <div className="py-4 mt-5 space-y-3 text-sm border-red-100 border-y">
-              {items.map(
-                ({ product, quantity, unitPrice, optionName }) =>
-                  product && (
+              {cartLoading ? <SummarySkeleton /> : items.map((item) => {
+                const { product, quantity, unitPrice, optionName } = item;
+                const itemOffer = activeOfferDetails.find((detail) => detailMatchesItem(detail, item));
+                return product && (
                     <div
                       key={`${product._id}-${optionName || "regular"}`}
                       className="flex justify-between gap-3"
                     >
-                      <span className="text-gray-600 line-clamp-1">
-                        {quantity} x {product.name}
+                      <span className="min-w-0 text-gray-600">
+                        <span className="block line-clamp-1">{quantity} x {product.name}</span>
+                        {itemOffer && (
+                          <small className="mt-1 block text-xs font-bold text-green-700">
+                            {itemOffer.offerName} ({itemOffer.offerLabel}) - Rs. {formatMoney(itemOffer.discount)}
+                          </small>
+                        )}
                       </span>
-                      <b>Rs. {(unitPrice ?? product.price) * quantity}</b>
+                      <b className="shrink-0">Rs. {formatMoney((unitPrice ?? product.price) * quantity)}</b>
                     </div>
-                  ),
-              )}
+                  );
+              })}
             </div>
-            <section className="mt-5 rounded-xl border border-red-100 bg-red-50/60 p-3">
-              <div className="flex items-center gap-2 text-sm font-extrabold text-gray-900">
-                <FiTag className="text-red-700" />
-                Coupon code
-              </div>
-              {appliedDiscount?.type === "coupon" ? (
-                <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-green-200 bg-white px-3 py-2">
-                  <div className="min-w-0">
-                    <b className="block text-sm text-green-700">{appliedDiscount.label}</b>
-                    <span className="block text-xs text-gray-500">You save Rs. {appliedDiscount.discount}</span>
+            {isCheckingSavings && <CheckingSavings />}
+            {!isCheckingSavings && discountQuote?.automaticOffer && (
+              <section className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3">
+                <b className="block text-xs text-amber-800">
+                  Automatic savings: {discountQuote.automaticOffer.label || discountQuote.automaticOffer.name}
+                </b>
+                <span className="mt-1 block text-xs text-amber-700">
+                  Save Rs. {formatMoney(discountQuote.automaticOffer.discount)} when this gives the best value.
+                </span>
+                {discountQuote.automaticOffer.details?.length > 0 && (
+                  <div className="mt-2 space-y-1 border-t border-amber-200 pt-2">
+                    {discountQuote.automaticOffer.details.map((detail) => (
+                      <div key={`${detail.productId}-${detail.optionName || "regular"}-${detail.offerName}`} className="flex justify-between gap-3 text-[11px] font-bold text-amber-800">
+                        <span className="min-w-0 truncate">{detail.quantity} x {detail.productName} - {detail.offerLabel}</span>
+                        <span className="shrink-0">- Rs. {formatMoney(detail.discount)}</span>
+                      </div>
+                    ))}
                   </div>
-                  <button type="button" onClick={removeCoupon} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-red-700 hover:bg-red-50" title="Remove coupon" aria-label="Remove coupon"><FiX /></button>
+                )}
+              </section>
+            )}
+            {(couponAvailable || appliedDiscount?.type === "coupon") && (
+              <section className="mt-5 rounded-xl border border-red-100 bg-red-50/60 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-sm font-extrabold text-gray-900">
+                    <FiTag className="text-red-700" />
+                    Coupon code
+                  </div>
+                  {!showCouponForm && appliedDiscount?.type !== "coupon" && (
+                    <button type="button" onClick={() => setShowCouponForm(true)} className="text-xs font-extrabold text-red-700 hover:text-red-800">
+                      Have a coupon?
+                    </button>
+                  )}
                 </div>
-              ) : (
-                <div className="mt-3 flex gap-2">
-                  <input value={couponCode} onChange={(event) => { setCouponCode(event.target.value.toUpperCase()); setCouponMessage(""); }} placeholder="e.g. WELCOME10" className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold uppercase outline-none focus:border-red-500 focus:ring-4 focus:ring-red-100" />
-                  <button type="button" onClick={applyCoupon} disabled={applyingCoupon || !items.length} className="rounded-lg bg-red-700 px-3 text-xs font-extrabold text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-60">{applyingCoupon ? "Checking..." : "Apply"}</button>
-                </div>
-              )}
-              {discountQuote?.automaticOffer && <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2"><b className="block text-xs text-amber-800">Automatic offer: {discountQuote.automaticOffer.name}</b><span className="mt-1 block text-xs text-amber-700">Save Rs. {discountQuote.automaticOffer.discount} when this offer gives the best value.</span></div>}
-              {couponMessage && <p className={`mt-2 text-xs font-semibold ${couponMessage.includes("applied") || couponMessage.includes("better saving") ? "text-green-700" : "text-red-700"}`}>{couponMessage}</p>}
-            </section>
+                {appliedDiscount?.type === "coupon" ? (
+                  <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-green-200 bg-white px-3 py-2">
+                    <div className="min-w-0">
+                      <b className="block text-sm text-green-700">{appliedDiscount.label}</b>
+                      <span className="block text-xs text-gray-500">You save Rs. {formatMoney(appliedDiscount.discount)}</span>
+                    </div>
+                    <button type="button" onClick={removeCoupon} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-red-700 hover:bg-red-50" title="Remove coupon" aria-label="Remove coupon"><FiX /></button>
+                  </div>
+                ) : showCouponForm ? (
+                  <div className="mt-3 flex gap-2">
+                    <input value={couponCode} onChange={(event) => { setCouponCode(event.target.value.toUpperCase()); setCouponMessage(""); }} placeholder="e.g. WELCOME10" className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold uppercase outline-none focus:border-red-500 focus:ring-4 focus:ring-red-100" />
+                    <button type="button" onClick={applyCoupon} disabled={applyingCoupon || !items.length} className="rounded-lg bg-red-700 px-3 text-xs font-extrabold text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-60">{applyingCoupon ? "Checking..." : "Apply"}</button>
+                    <button type="button" onClick={() => { setShowCouponForm(false); setCouponMessage(""); }} className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-red-700 hover:bg-white" title="Hide coupon" aria-label="Hide coupon"><FiX /></button>
+                  </div>
+                ) : (
+                  <p className="mt-2 text-xs text-gray-500">
+                    Active coupon available. Add your code if you have one.
+                  </p>
+                )}
+                {showCouponForm && discountQuote?.coupon && appliedDiscount?.type !== "coupon" && couponMatchesInput(discountQuote.coupon, couponCode) && (
+                  <div className="mt-3 rounded-lg border border-green-200 bg-white px-3 py-2">
+                    <b className="block text-xs text-green-700">
+                      {discountQuote.coupon.code} is valid
+                    </b>
+                    <span className="mt-1 block text-xs leading-5 text-gray-500">
+                      This coupon saves Rs. {formatMoney(discountQuote.coupon.discount)}, but {automaticSavingName(discountQuote.automaticOffer)} is giving the better discount right now.
+                    </span>
+                  </div>
+                )}
+                {couponMessage && <p className={`mt-2 text-xs font-semibold ${couponMessage.includes("applied") || couponMessage.includes("valid") || couponMessage.includes("better saving") ? "text-green-700" : "text-red-700"}`}>{couponMessage}</p>}
+              </section>
+            )}
             <div className="mt-5 space-y-3 text-sm">
-              <div className="flex justify-between text-gray-600"><span>Subtotal</span><b className="text-gray-900">Rs. {total}</b></div>
-              {discount > 0 && <div className="flex justify-between text-green-700"><span>{appliedDiscount?.type === "coupon" ? "Coupon discount" : "Automatic offer"}</span><b>- Rs. {discount}</b></div>}
+              <div className="flex justify-between text-gray-600"><span>Subtotal</span>{cartLoading ? <span className="h-4 w-16 animate-pulse rounded-full bg-red-100" /> : <b className="text-gray-900">Rs. {formatMoney(total)}</b>}</div>
+              {!isCheckingSavings && discount > 0 && <div className="flex justify-between text-green-700"><span>{appliedDiscount?.type === "coupon" ? "Coupon discount" : appliedDiscount?.kind === "items" ? "Item offers" : "Automatic offer"}</span><b>- Rs. {formatMoney(discount)}</b></div>}
             </div>
             <div className="flex justify-between pt-4 mt-4 text-base font-extrabold border-t border-red-100">
               <span>Grand Total</span>
-              <span>Rs. {grandTotal}</span>
+              {cartLoading || isCheckingSavings ? (
+                <span className="flex items-center gap-2 text-sm text-red-700">
+                  <FiLoader className="animate-spin" />
+                  Calculating
+                </span>
+              ) : (
+                <span>Rs. {formatMoney(grandTotal)}</span>
+              )}
             </div>
           </aside>
         </div>

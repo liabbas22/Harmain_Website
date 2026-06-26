@@ -1,7 +1,8 @@
 import React from "react";
-import {FaShareAlt } from "react-icons/fa";
+import { FaShareAlt } from "react-icons/fa";
 import { FaMinus, FaPlus, FaTrash } from "react-icons/fa6";
 import { IoMdArrowRoundForward, IoMdClose } from "react-icons/io";
+import OfferBadge from "./OfferBadge";
 
 const ModalDetailsPage = ({
   modalAnimation,
@@ -18,6 +19,7 @@ const ModalDetailsPage = ({
   const isOutOfStock = item?.isOutOfStock === true || Number(item?.stock) <= 0;
   const isAvailable = item?.isAvailable !== false && !isOutOfStock;
   const availabilityLabel = isOutOfStock ? "Stock out" : "Unavailable";
+
   return (
     <div
       className={`fixed inset-0 z-50 flex items-center justify-center p-3 transition-all duration-300 ${
@@ -26,12 +28,9 @@ const ModalDetailsPage = ({
       onClick={handleCloseModal}
     >
       <div
-        className={`relative w-full max-w-6xl rounded-lg bg-white md:rounded-xl lg:rounded-3xl shadow-2xl transition-all duration-300 
-  max-h-[90vh] overflow-y-auto lg:overflow-hidden lg:max-h-none ${
-    modalAnimation
-      ? "opacity-100 scale-100 translate-y-0"
-      : "opacity-0 scale-95 translate-y-10"
-  }`}
+        className={`relative w-full max-w-6xl rounded-lg bg-white md:rounded-xl lg:rounded-3xl shadow-2xl transition-all duration-300 max-h-[90vh] overflow-y-auto lg:overflow-hidden lg:max-h-none ${
+          modalAnimation ? "opacity-100 scale-100 translate-y-0" : "opacity-0 scale-95 translate-y-10"
+        }`}
         onClick={(e) => {
           e.stopPropagation();
         }}
@@ -43,6 +42,9 @@ const ModalDetailsPage = ({
               alt={item?.title}
               className="object-cover w-full h-full"
             />
+
+            <OfferBadge offer={item?.activeOffer} className="absolute left-4 top-4 z-40" />
+
             <div
               className="absolute z-50 flex items-center gap-3 top-4 right-3 md:top-4 md:right-4 lg:hidden"
               onClick={(e) => e.stopPropagation()}
@@ -65,7 +67,7 @@ const ModalDetailsPage = ({
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
 
             <div className="absolute bottom-0 left-0 p-6">
-              <h2 className="text-2xl font-extrabold text-white md:text-3xl ">
+              <h2 className="text-2xl font-extrabold text-white md:text-3xl">
                 {item?.title}
               </h2>
 
@@ -119,7 +121,7 @@ const ModalDetailsPage = ({
                   <div
                     key={index}
                     onClick={() => setSelectedOption(option)}
-                    className={`border rounded-2xl p-2 cursor-pointer transition-all duration-300  ${
+                    className={`border rounded-2xl p-2 cursor-pointer transition-all duration-300 ${
                       selectedOption === option
                         ? "border-red-600 bg-red-50 shadow-md"
                         : "border-gray-200 hover:border-red-300"
@@ -173,10 +175,7 @@ const ModalDetailsPage = ({
               </div>
             </div>
 
-            <div
-              className="sticky bottom-0 left-0 z-40 flex items-center justify-between gap-2 p-3 bg-white border-t 
-  shadow-[0_-4px_20px_rgba(0,0,0,0.08)] overflow-y-auto"
-            >
+            <div className="sticky bottom-0 left-0 z-40 flex items-center justify-between gap-2 p-3 bg-white border-t shadow-[0_-4px_20px_rgba(0,0,0,0.08)] overflow-y-auto">
               <div className="flex items-center overflow-hidden border-2 border-red-100 rounded-xl md:rounded-full bg-red-50">
                 <button
                   className="flex items-center justify-center w-10 h-10 text-red-700 transition-all duration-200 hover:bg-red-100"

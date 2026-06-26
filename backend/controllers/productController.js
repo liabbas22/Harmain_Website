@@ -1,5 +1,6 @@
 import Product from "../models/Product.js";
 import asyncHandler from "../utils/asyncHandler.js";
+import { attachActiveOffersToProducts } from "../utils/offerService.js";
 import { emitStockAlert } from "../utils/stockAlerts.js";
 
 export const getProducts = asyncHandler(async (req, res) => {
@@ -10,7 +11,7 @@ export const getProducts = asyncHandler(async (req, res) => {
   if (search?.trim()) filter.$text = { $search: search.trim() };
   const currentPage = Math.max(Number(page), 1);
   const pageSize = Math.min(Math.max(Number(limit), 1), 100);
-  const [products, total] = await Promise.all([
+  const [productDocs, total] = await Promise.all([
     Product.find(filter)
       .populate("category")
       .sort({ createdAt: -1 })
@@ -18,6 +19,7 @@ export const getProducts = asyncHandler(async (req, res) => {
       .limit(pageSize),
     Product.countDocuments(filter),
   ]);
+  const products = await attachActiveOffersToProducts(productDocs);
   res.json({
     products,
     pagination: { page: currentPage, limit: pageSize, total },
@@ -27,7 +29,8 @@ export const getProducts = asyncHandler(async (req, res) => {
 export const getProductById = asyncHandler(async (req, res) => {
   const product = await Product.findById(req.params.id).populate("category");
   if (!product) return res.status(404).json({ message: "Product not found" });
-  res.json(product);
+  const [productWithOffer] = await attachActiveOffersToProducts([product]);
+  res.json(productWithOffer);
 });
 
 export const createProduct = asyncHandler(async (req, res) => {

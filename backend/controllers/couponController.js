@@ -68,6 +68,22 @@ export const getCoupons = asyncHandler(async (_req, res) => {
   res.json(await Coupon.find().sort({ createdAt: -1 }));
 });
 
+export const getCouponAvailability = asyncHandler(async (_req, res) => {
+  const now = new Date();
+  const activeCount = await Coupon.countDocuments({
+    isActive: true,
+    startsAt: { $lte: now },
+    $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }],
+    $expr: {
+      $or: [
+        { $eq: ["$usageLimit", 0] },
+        { $lt: ["$usedCount", "$usageLimit"] },
+      ],
+    },
+  });
+  res.json({ available: activeCount > 0, count: activeCount });
+});
+
 export const createCoupon = asyncHandler(async (req, res) => {
   const coupon = await Coupon.create(couponPayload(req.body));
   res.status(201).json(coupon);

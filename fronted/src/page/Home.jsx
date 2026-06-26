@@ -24,6 +24,7 @@ const productCard = (product) => {
     stock,
     isOutOfStock,
     isAvailable: product.isAvailable !== false && !isOutOfStock,
+    activeOffer: product.activeOffer || null,
     options: product.options?.length ? product.options : [{ name: "Regular", actualPrice: product.price }],
   };
 };

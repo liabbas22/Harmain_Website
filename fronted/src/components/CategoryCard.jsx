@@ -1,5 +1,6 @@
-﻿import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import ModalDetailsPage from "./ModalDetailsPage";
+import OfferBadge from "./OfferBadge";
 import api from "../api";
 
 const CategoryCard = ({ item }) => {
@@ -31,17 +32,31 @@ const CategoryCard = ({ item }) => {
       setModelVisible(false);
     }, 300);
   };
-  const addToCart = async (event, quantity = 1, selectedOption = item?.options?.[0], instructions = "") => {
+
+  const addToCart = async (
+    event,
+    quantity = 1,
+    selectedOption = item?.options?.[0],
+    instructions = "",
+  ) => {
     event?.stopPropagation();
     if (!isAvailable) return;
-    if (!localStorage.getItem("harmain_token")) return window.location.assign("/login");
+    if (!localStorage.getItem("harmain_token"))
+      return window.location.assign("/login");
     try {
-      await api.post("/cart", { productId: item.id, quantity, optionName: selectedOption?.name || "", specialInstructions: instructions });
+      await api.post("/cart", {
+        productId: item.id,
+        quantity,
+        optionName: selectedOption?.name || "",
+        specialInstructions: instructions,
+      });
       window.dispatchEvent(new Event("harmain-cart-updated"));
       handleCloseModal();
       setToast(true);
       window.setTimeout(() => setToast(false), 2600);
-    } catch (error) { alert(error.response?.data?.message || "Could not add item to cart"); }
+    } catch (error) {
+      alert(error.response?.data?.message || "Could not add item to cart");
+    }
   };
 
   useEffect(() => {
@@ -58,14 +73,30 @@ const CategoryCard = ({ item }) => {
 
   return (
     <>
-      {toast && <div className="fixed top-5 left-1/2 z-[70] flex -translate-x-1/2 items-center gap-2 rounded-xl bg-green-700 px-4 py-3 text-sm font-bold text-white shadow-xl"><span className="grid h-5 w-5 place-items-center rounded-full bg-white text-xs text-green-700">OK</span>{item?.title} added to cart successfully</div>}
+      {toast && (
+        <div className="fixed top-5 left-1/2 z-[70] flex -translate-x-1/2 items-center gap-2 rounded-xl bg-green-700 px-4 py-3 text-sm font-bold text-white shadow-xl">
+          <span className="grid w-5 h-5 text-xs text-green-700 bg-white rounded-full place-items-center">
+            OK
+          </span>
+          {item?.title} added to cart successfully
+        </div>
+      )}
       <div
         id={`product-${item?.id}`}
-        className="relative flex items-center gap-4 p-3 transition-all duration-500 ease-in-out shadow-sm cursor-pointer
-      bg-gray-50 rounded-2xl hover:shadow-md group hover:scale-[1.02] hover:bg-red-100"
+        className="relative flex items-center gap-4 p-3 transition-all duration-500 ease-in-out shadow-sm cursor-pointer bg-gray-50 rounded-2xl hover:shadow-md group hover:scale-[1.02] hover:bg-red-100"
         onClick={handleOpenModal}
       >
-        {!isAvailable && <span className="absolute top-3 left-3 z-10 rounded-md bg-red-700 px-2 py-1 text-[10px] font-extrabold uppercase tracking-wide text-white shadow-sm">{availabilityLabel}</span>}
+        {!isAvailable && (
+          <span className="absolute top-3 right-3 z-10 rounded-md bg-red-700 px-2 py-1 text-[10px] font-extrabold uppercase tracking-wide text-white shadow-sm">
+            {availabilityLabel}
+          </span>
+        )}
+        <OfferBadge
+          offer={item?.activeOffer}
+          compact
+          className="absolute z-10 left-3 top-3"
+        />
+
         <div className="overflow-hidden w-28 h-28 md:w-40 md:h-40 rounded-xl">
           <img
             src={item?.image}
@@ -116,7 +147,11 @@ const CategoryCard = ({ item }) => {
               </span>
             )}
 
-            <button disabled={!isAvailable} onClick={addToCart} className="px-4 py-1 text-sm font-bold text-white transition-all duration-300 ease-in-out bg-red-700 rounded-md md:px-6 lg:py-2 lg:px-6 hover:bg-red-800 hover:shadow-md w-fit disabled:cursor-not-allowed disabled:bg-gray-400 disabled:hover:bg-gray-400 disabled:hover:shadow-none">
+            <button
+              disabled={!isAvailable}
+              onClick={addToCart}
+              className="px-4 py-1 text-sm font-bold text-white transition-all duration-300 ease-in-out bg-red-700 rounded-md md:px-6 lg:py-2 lg:px-6 hover:bg-red-800 hover:shadow-md w-fit disabled:cursor-not-allowed disabled:bg-gray-400 disabled:hover:bg-gray-400 disabled:hover:shadow-none"
+            >
               {isAvailable ? "Add to Cart" : availabilityLabel}
             </button>
           </div>
@@ -134,7 +169,9 @@ const CategoryCard = ({ item }) => {
           handleCloseModal={handleCloseModal}
           selectedOption={selectedOption}
           setSelectedOption={setSelectedOption}
-          onAddToCart={() => addToCart(null, quantity, selectedOption, specialInstructions)}
+          onAddToCart={() =>
+            addToCart(null, quantity, selectedOption, specialInstructions)
+          }
         />
       )}
     </>
@@ -142,4 +179,3 @@ const CategoryCard = ({ item }) => {
 };
 
 export default CategoryCard;
-
