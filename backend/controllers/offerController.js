@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import Cart from "../models/Cart.js";
 import Offer from "../models/Offer.js";
 import asyncHandler from "../utils/asyncHandler.js";
+import { calculateDeliveryCharge } from "../utils/deliverySettingsService.js";
 import { automaticOfferSummary, selectBestDiscount } from "../utils/offerService.js";
 
 const requestError = (message) => { const error = new Error(message); error.statusCode = 400; return error; };
@@ -39,11 +40,16 @@ export const quoteBestDiscount = asyncHandler(async (req, res) => {
   if (!items.length) return res.status(400).json({ message: "Your cart is empty" });
   const subtotal = items.reduce((sum, item) => sum + (item.unitPrice ?? item.product.price) * item.quantity, 0);
   const selection = await selectBestDiscount({ items, subtotal, userId: req.user._id, couponCode: req.body.couponCode || "" });
+  const discount = selection.applied?.discount || 0;
+  const delivery = await calculateDeliveryCharge(subtotal);
   res.json({
     subtotal,
     automaticOffer: automaticOfferSummary(selection.automaticOffer),
     coupon: selection.couponResult ? { code: selection.couponResult.coupon.code, discount: selection.couponResult.discount } : null,
     applied: selection.applied ? { type: selection.applied.type, label: selection.applied.label, discount: selection.applied.discount, kind: selection.applied.kind || null, details: selection.applied.details || [] } : null,
-    total: Math.max(0, subtotal - (selection.applied?.discount || 0)),
+    delivery,
+    deliveryFee: delivery.deliveryFee,
+    total: Math.max(0, subtotal - discount),
+    grandTotal: Math.max(0, subtotal - discount + delivery.deliveryFee),
   });
 });

@@ -12,6 +12,7 @@ import CouponsPage from "./features/coupons/CouponsPage";
 import OfferEditor from "./features/offers/OfferEditor";
 import OffersPage from "./features/offers/OffersPage";
 import OverviewPage from "./features/dashboard/OverviewPage";
+import DeliverySettingsPage from "./features/settings/DeliverySettingsPage";
 import CancelOrderModal from "./features/orders/CancelOrderModal";
 import OrdersPage from "./features/orders/OrdersPage";
 import OrderDetailsModal from "./features/orders/OrderDetailsModal";
@@ -174,6 +175,8 @@ function App() {
   const [couponsLoading, setCouponsLoading] = useState(false);
   const [offers, setOffers] = useState([]);
   const [offersLoading, setOffersLoading] = useState(false);
+  const [deliverySettings, setDeliverySettings] = useState(null);
+  const [deliverySettingsLoading, setDeliverySettingsLoading] = useState(false);
   const orderRequestRef = useRef(0);
 
   const logout = useCallback(() => {
@@ -191,6 +194,7 @@ function App() {
     setUnreadOrdersOwner(null);
     setCoupons([]);
     setOffers([]);
+    setDeliverySettings(null);
   }, []);
 
   const notify = useCallback((message, type = "success") => setToast({ message, type, id: Date.now() }), []);
@@ -231,6 +235,23 @@ function App() {
   useEffect(() => {
     loadOffers();
   }, [loadOffers]);
+
+  const loadDeliverySettings = useCallback(async () => {
+    if (!session?.token) return;
+    setDeliverySettingsLoading(true);
+    try {
+      setDeliverySettings(await adminApi.getDeliverySettings(session.token));
+    } catch (requestError) {
+      if (requestError.status === 401 || requestError.status === 403) logout();
+      else notify(requestError.message || "Could not load delivery settings.", "error");
+    } finally {
+      setDeliverySettingsLoading(false);
+    }
+  }, [logout, notify, session?.token]);
+
+  useEffect(() => {
+    loadDeliverySettings();
+  }, [loadDeliverySettings]);
 
   const loadFilteredOrders = useCallback(async (filter) => {
     if (!session?.token) return;
@@ -456,6 +477,25 @@ function App() {
     }
   };
 
+  const saveDeliverySettings = async (values) => {
+    const payload = {
+      isDeliveryEnabled: values.isDeliveryEnabled,
+      deliveryFee: Number(values.deliveryFee || 0),
+      freeDeliveryAbove: Number(values.freeDeliveryAbove || 0),
+      estimatedMinutes: Number(values.estimatedMinutes || 0),
+      note: values.note.trim(),
+    };
+    setBusyAction("delivery-settings-save");
+    try {
+      setDeliverySettings(await adminApi.saveDeliverySettings(payload, session.token));
+      notify("Delivery settings updated.");
+    } catch (requestError) {
+      notify(requestError.message || "Delivery settings could not be saved.", "error");
+    } finally {
+      setBusyAction("");
+    }
+  };
+
   const saveCategory = async (event) => {
     event.preventDefault();
     const editor = categoryEditor;
@@ -571,8 +611,8 @@ function App() {
     message: entity === "product" ? "This product will be permanently removed from the menu and cannot be recovered." : entity === "coupon" ? "This coupon will no longer be available at checkout. This action cannot be undone." : entity === "offer" ? "This automatic offer will no longer be available at checkout. This action cannot be undone." : "Delete this category only after its products have been reassigned. This action cannot be undone.",
   });
 
-  const viewLoading = view === "orders" ? ordersLoading : view === "coupons" ? couponsLoading : view === "offers" ? offersLoading : loading;
-  const refreshView = view === "orders" ? () => loadFilteredOrders(orderFilter) : view === "coupons" ? loadCoupons : view === "offers" ? loadOffers : load;
+  const viewLoading = view === "orders" ? ordersLoading : view === "coupons" ? couponsLoading : view === "offers" ? offersLoading : view === "delivery" ? deliverySettingsLoading : loading;
+  const refreshView = view === "orders" ? () => loadFilteredOrders(orderFilter) : view === "coupons" ? loadCoupons : view === "offers" ? loadOffers : view === "delivery" ? loadDeliverySettings : load;
 
   return (
     <>
@@ -584,6 +624,7 @@ function App() {
         {view === "orders" && <OrdersPage orders={filteredOrders} total={filteredOrdersTotal} filter={orderFilter} unreadOrderIds={unreadOrderIds} onMarkOrderRead={markOrderRead} onFilterChange={setOrderFilter} onUpdate={updateOrder} onCancel={(order) => setCancelEditor({ order })} onOpenOrder={setOrderDetails} busyAction={busyAction} loading={ordersLoading} error={ordersError} />}
         {view === "coupons" && <CouponsPage coupons={coupons} onNew={() => setCouponEditor({ id: null, values: { ...emptyCoupon, startsAt: toDateTimeInput(new Date()) } })} onEdit={(coupon) => setCouponEditor(toCouponEditor(coupon))} onDelete={(coupon) => requestDelete("coupon", coupon)} busyAction={busyAction} />}
         {view === "offers" && <OffersPage offers={offers} onNew={() => setOfferEditor({ id: null, values: { ...emptyOffer, startsAt: toDateTimeInput(new Date()) } })} onEdit={(offer) => setOfferEditor(toOfferEditor(offer))} onDelete={(offer) => requestDelete("offer", offer)} busyAction={busyAction} />}
+        {view === "delivery" && <DeliverySettingsPage settings={deliverySettings} loading={deliverySettingsLoading} onSave={saveDeliverySettings} busy={busyAction === "delivery-settings-save"} />}
         {view === "riders" && <RidersPage riders={riders} onNew={() => setRiderEditor({ id: null, values: emptyRider })} onEdit={(rider) => setRiderEditor({ id: rider._id, values: { ...emptyRider, ...rider, password: "" } })} />}
       </AdminShell>
       {productEditor && <ProductEditor editor={productEditor} categories={categories} onChange={setProductEditor} onClose={() => setProductEditor(null)} onSave={saveProduct} busy={busyAction === "product-save"} />}

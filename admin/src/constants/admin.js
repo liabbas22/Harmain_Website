@@ -44,6 +44,7 @@ export const navigationItems = [
   ["orders", "Orders"],
   ["coupons", "Coupons"],
   ["offers", "Offers"],
+  ["delivery", "Delivery settings"],
   ["riders", "Delivery team"],
 ];
 

@@ -6,6 +6,7 @@ import Product from "../models/Product.js";
 import User from "../models/User.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { claimCouponUsage } from "../utils/couponService.js";
+import { calculateDeliveryCharge } from "../utils/deliverySettingsService.js";
 import { couponSnapshot, offerBreakdownSnapshot, offerSnapshot, selectBestDiscount } from "../utils/offerService.js";
 import { emitStockAlert } from "../utils/stockAlerts.js";
 
@@ -183,7 +184,9 @@ export const checkout = asyncHandler(async (req, res) => {
 
   const discountSelection = await selectBestDiscount({ items: cart.items, subtotal, userId: req.user._id, couponCode });
   const discount = discountSelection.applied?.discount || 0;
-  const deliveryFee = Number(process.env.DELIVERY_FEE || 0);
+  const delivery = await calculateDeliveryCharge(subtotal);
+  if (!delivery.isDeliveryEnabled) return res.status(400).json({ message: "Delivery is currently unavailable" });
+  const deliveryFee = delivery.deliveryFee;
   if (discountSelection.applied?.type === "coupon") await claimCouponUsage(discountSelection.applied.coupon);
 
   let order;

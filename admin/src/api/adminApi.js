@@ -29,6 +29,9 @@ export const adminApi = {
   getRiders: (token) => request("/auth/admin/riders", { token }),
   getCoupons: (token) => request("/coupons", { token }),
   getOffers: (token) => request("/offers", { token }),
+  getDeliverySettings: (token) => request("/settings/delivery", { token }),
+  saveDeliverySettings: (body, token) =>
+    request("/settings/delivery", { method: "PATCH", body, token }),
   createRider: (body, token) => request("/auth/admin/riders", { method: "POST", body, token }),
   updateRider: (id, body, token) => request(`/auth/admin/riders/${id}`, { method: "PATCH", body, token }),
   saveProduct: (id, body, token) =>
