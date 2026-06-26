@@ -34,6 +34,14 @@ export default function OrderDetailsModal({
     ([value]) => value === order.cancellationReason,
   )?.[1];
   const offerBreakdown = order.offerBreakdown || [];
+  const itemTotalQuantity = (item) =>
+    Number(item.quantity || 0) + Number(item.freeQuantity || 0);
+  const hasOfferBreakdownLine = offerBreakdown.some(
+    (detail) =>
+      order.offer?.name &&
+      detail.offerName === order.offer.name &&
+      Number(detail.discount || 0) > 0,
+  );
 
   return (
     <Modal title={shortId(order._id)} onClose={onClose} size="max-w-3xl">
@@ -178,7 +186,7 @@ export default function OrderDetailsModal({
               Items ordered
             </h3>
             <span className="text-xs font-extrabold text-slate-500">
-              {items.reduce((sum, item) => sum + Number(item.quantity || 0), 0)}{" "}
+              {items.reduce((sum, item) => sum + itemTotalQuantity(item), 0)}{" "}
               items
             </span>
           </div>
@@ -201,6 +209,11 @@ export default function OrderDetailsModal({
                     {item.optionName} x{item.quantity}
                   </small>
                 )}
+                {Number(item.freeQuantity || 0) > 0 && (
+                  <small className="block mt-1 text-xs font-bold text-emerald-700">
+                    + {item.freeQuantity} free | prepare x{itemTotalQuantity(item)}
+                  </small>
+                )}
                 {item.specialInstructions && (
                   <p className="mt-1 text-xs leading-5 text-amber-700">
                     Note: {item.specialInstructions}
@@ -208,7 +221,7 @@ export default function OrderDetailsModal({
                 )}
               </div>
               <b className="text-sm text-right text-slate-800">
-                {money(Number(item.price || 0) * Number(item.quantity || 0))}
+                {money(Number(item.price || 0) * itemTotalQuantity(item))}
               </b>
             </article>
           ))}
@@ -218,11 +231,27 @@ export default function OrderDetailsModal({
           <b className="text-right text-slate-800">{money(order.subtotal)}</b>
           {Number(order.discount) > 0 && (
             <>
-              <span>{order.coupon?.code ? `Coupon (${order.coupon.code})` : order.offer?.name ? `Offer (${order.offer.name})` : "Discount"}</span>
+              <span>Total savings</span>
               <b className="text-right text-emerald-700">- {money(order.discount)}</b>
+              {order.coupon?.code && (
+                <small className="col-span-2 -mt-1 text-[11px] font-bold text-slate-500">
+                  Coupon {order.coupon.code}: - {money(order.coupon.discount)}
+                </small>
+              )}
+              {order.offer?.name && !hasOfferBreakdownLine && (
+                <small className="col-span-2 -mt-1 text-[11px] font-bold text-slate-500">
+                  Offer {order.offer.name}: - {money(order.offer.discount)}
+                </small>
+              )}
               {offerBreakdown.map((detail, index) => (
                 <small className="col-span-2 -mt-1 grid grid-cols-[1fr_auto] gap-3 rounded-md bg-emerald-50 px-2 py-1 text-[11px] font-bold text-emerald-700" key={`${detail.product || detail.productName}-${index}`}>
-                  <span className="truncate">{detail.quantity} x {detail.productName} - {detail.offerName}</span>
+                  <span className="truncate">
+                    {detail.quantity} x {detail.productName}
+                    {Number(detail.freeQuantity || 0) > 0
+                      ? ` + ${detail.freeQuantity} free`
+                      : ""}{" "}
+                    - {detail.offerName}
+                  </span>
                   <span>- {money(detail.discount)}</span>
                 </small>
               ))}

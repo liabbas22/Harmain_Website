@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FaChevronLeft,
@@ -16,6 +16,7 @@ export default function CartDrawer({ onClose }) {
   const [cart, setCart] = useState(null);
   const [products, setProducts] = useState([]);
   const [offset, setOffset] = useState(0);
+  const [comboAddingId, setComboAddingId] = useState("");
   const load = async () => {
     const { data } = await api.get("/cart");
     setCart(data);
@@ -49,7 +50,20 @@ export default function CartDrawer({ onClose }) {
     await load();
     window.dispatchEvent(new Event("harmain-cart-updated"));
   };
+  const addComboProduct = async (product) => {
+    if (!product?._id) return;
+    const optionName = product.options?.[0]?.name || "";
+    setComboAddingId(product._id);
+    try {
+      await api.post("/cart", { productId: product._id, quantity: 1, optionName });
+      await load();
+      window.dispatchEvent(new Event("harmain-cart-updated"));
+    } finally {
+      setComboAddingId("");
+    }
+  };
   const items = cart?.items || [];
+  const comboSuggestions = cart?.comboSuggestions || [];
   const subtotal = items.reduce(
     (sum, item) => sum + (item.unitPrice ?? item.product?.price ?? 0) * item.quantity,
     0,
@@ -156,6 +170,80 @@ export default function CartDrawer({ onClose }) {
                 ),
             )}
           </div>
+        )}
+        {Boolean(comboSuggestions.length) && (
+          <section className="p-3 border shadow-sm rounded-2xl border-red-100 bg-gradient-to-br from-red-50 via-white to-white">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-red-700">
+                  Complete your combo
+                </p>
+                <p className="mt-1 text-xs font-medium text-gray-500">
+                  Add the missing item and unlock the combo saving.
+                </p>
+              </div>
+              <span className="shrink-0 rounded-full bg-red-700 px-2.5 py-1 text-[10px] font-extrabold text-white">
+                Save more
+              </span>
+            </div>
+            <div className="mt-3 space-y-3">
+              {comboSuggestions.map((suggestion) => (
+                <article
+                  key={suggestion.offerId}
+                  className="p-3 bg-white border border-red-100 rounded-xl"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-extrabold text-gray-900">
+                        {suggestion.name}
+                      </h3>
+                      <p className="mt-0.5 text-xs text-gray-500">
+                        Add {suggestion.missingCount} more item
+                        {suggestion.missingCount > 1 ? "s" : ""} for combo price Rs.{" "}
+                        {suggestion.comboPrice}
+                      </p>
+                    </div>
+                    <b className="text-xs text-green-700 whitespace-nowrap">
+                      Save Rs. {suggestion.estimatedSaving}
+                    </b>
+                  </div>
+                  <div className="grid gap-2 mt-3">
+                    {suggestion.missingProducts.map((product) => (
+                      <button
+                        key={product._id}
+                        onClick={() => addComboProduct(product)}
+                        disabled={comboAddingId === product._id}
+                        className="flex items-center gap-3 p-2 text-left transition border border-red-100 rounded-xl hover:border-red-300 hover:bg-red-50 disabled:cursor-wait disabled:opacity-70"
+                      >
+                        <span className="flex items-center justify-center w-11 h-11 overflow-hidden text-sm font-extrabold text-red-700 rounded-lg bg-red-50 shrink-0">
+                          {product.image ? (
+                            <img
+                              src={product.image}
+                              alt={product.name}
+                              className="object-cover w-full h-full"
+                            />
+                          ) : (
+                            product.name?.charAt(0) || "C"
+                          )}
+                        </span>
+                        <span className="flex-1 min-w-0">
+                          <span className="block text-xs font-extrabold text-gray-900 truncate">
+                            {product.name}
+                          </span>
+                          <span className="block mt-0.5 text-[11px] font-bold text-red-700">
+                            Rs. {product.price}
+                          </span>
+                        </span>
+                        <span className="flex items-center justify-center w-8 h-8 text-white bg-red-700 rounded-full">
+                          <FaPlus size={10} />
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
         )}
         <section className="pt-5 border-t border-red-100">
           <div className="flex items-center justify-between mb-3">

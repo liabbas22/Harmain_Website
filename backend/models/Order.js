@@ -8,6 +8,8 @@ const itemSchema = new mongoose.Schema({
   image: { type: String, default: "" },
   price: { type: Number, required: true, min: 0 },
   quantity: { type: Number, required: true, min: 1 },
+  freeQuantity: { type: Number, default: 0, min: 0 },
+  grossQuantity: { type: Number, default: 0, min: 0 },
 }, { _id: false });
 
 const addressSchema = new mongoose.Schema({
@@ -29,9 +31,13 @@ const couponSchema = new mongoose.Schema({
 
 const offerSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
+  dealType: { type: String, enum: ["discount", "buy_x_get_y", "combo"], default: "discount" },
   discountType: { type: String, enum: ["percentage", "fixed"], required: true },
   value: { type: Number, required: true, min: 0 },
   appliesTo: { type: String, enum: ["order", "category", "products"], required: true },
+  buyQuantity: { type: Number, default: 1, min: 1 },
+  getQuantity: { type: Number, default: 1, min: 1 },
+  comboPrice: { type: Number, default: 0, min: 0 },
   discount: { type: Number, required: true, min: 0 },
 }, { _id: false });
 
@@ -40,7 +46,12 @@ const offerBreakdownSchema = new mongoose.Schema({
   productName: { type: String, required: true, trim: true },
   optionName: { type: String, default: "", trim: true },
   quantity: { type: Number, required: true, min: 1 },
+  freeQuantity: { type: Number, default: 0, min: 0 },
+  grossQuantity: { type: Number, default: 0, min: 0 },
+  lineSubtotal: { type: Number, default: 0, min: 0 },
+  freeItemValue: { type: Number, default: 0, min: 0 },
   offerName: { type: String, required: true, trim: true },
+  dealType: { type: String, enum: ["discount", "buy_x_get_y", "combo"], default: "discount" },
   discountType: { type: String, enum: ["percentage", "fixed"], required: true },
   value: { type: Number, required: true, min: 0 },
   discount: { type: Number, required: true, min: 0 },

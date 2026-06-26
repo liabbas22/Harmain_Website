@@ -26,7 +26,12 @@ export const couponSummary = (coupon) => ({
   maxDiscount: coupon.maxDiscount,
 });
 
-export const validateCoupon = async ({ code, subtotal, userId }) => {
+export const validateCoupon = async ({
+  code,
+  subtotal,
+  userId,
+  eligibilitySubtotal = subtotal,
+}) => {
   const normalizedCode = normalizeCouponCode(code);
   if (!normalizedCode)
     throw serviceError("Enter a coupon code to continue.");
@@ -46,7 +51,8 @@ export const validateCoupon = async ({ code, subtotal, userId }) => {
     throw serviceError("This coupon has expired.");
   if (coupon.usageLimit > 0 && coupon.usedCount >= coupon.usageLimit)
     throw serviceError("This coupon has reached its usage limit.");
-  if (orderAmount < coupon.minimumOrder)
+  const eligibilityAmount = Number(eligibilitySubtotal);
+  if (!Number.isFinite(eligibilityAmount) || eligibilityAmount < coupon.minimumOrder)
     throw serviceError(
       `This coupon requires a minimum order of Rs. ${coupon.minimumOrder}.`,
     );

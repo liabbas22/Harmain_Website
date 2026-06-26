@@ -37,13 +37,28 @@ const Field = ({ label, icon, error, children }) => (
 );
 const formatMoney = (value) =>
   Number(value || 0).toLocaleString("en-PK", { maximumFractionDigits: 2 });
+const lineKeyForItem = (item) =>
+  [
+    String(item.product?._id || item.product || ""),
+    item.optionName || "",
+    item.specialInstructions || "",
+  ].join("::");
 const detailMatchesItem = (detail, item) =>
-  detail?.productId === String(item.product?._id || item.product || "") &&
-  (detail.optionName || "") === (item.optionName || "");
+  detail?.lineKey
+    ? detail.lineKey === lineKeyForItem(item)
+    : detail?.productId === String(item.product?._id || item.product || "") &&
+      (detail.optionName || "") === (item.optionName || "");
 const couponMatchesInput = (coupon, code) =>
   coupon?.code && coupon.code === code.trim().toUpperCase();
 const automaticSavingName = (offer) =>
   offer?.label || offer?.name || "Automatic savings";
+const extraSavingLabel = (applied) => {
+  if (!applied) return "Extra savings";
+  if (applied.type === "coupon") return `Coupon (${applied.label})`;
+  if (applied.kind === "combo") return `Combo (${applied.label})`;
+  if (applied.kind === "order") return `Offer (${applied.label})`;
+  return "Automatic offer";
+};
 const SummarySkeleton = () => (
   <div className="space-y-3">
     {[0, 1, 2].map((item) => (
@@ -134,21 +149,26 @@ export default function Checkout() {
   if (!localStorage.getItem("harmain_token"))
     return <Navigate to="/login" replace />;
   const items = cart?.items || [];
-  const total = items.reduce(
+  const paidTotal = items.reduce(
     (sum, item) =>
       sum + (item.unitPrice ?? item.product?.price ?? 0) * item.quantity,
     0,
   );
+  const total = Number(discountQuote?.subtotal ?? paidTotal);
   const appliedDiscount = discountQuote?.applied;
   const discount = appliedDiscount?.discount || 0;
+  const itemDiscount = Number(appliedDiscount?.itemDiscount || 0);
+  const extraDiscount = Number(
+    appliedDiscount?.extraDiscount ?? Math.max(0, discount - itemDiscount),
+  );
   const delivery = discountQuote?.delivery || null;
   const deliveryFee = Number(discountQuote?.deliveryFee ?? delivery?.deliveryFee ?? 0);
   const grandTotal = Number(discountQuote?.grandTotal ?? Math.max(0, total - discount + deliveryFee));
   const activeOfferDetails =
-    appliedDiscount?.type === "offer" ? appliedDiscount.details || [] : [];
+    appliedDiscount?.details || [];
   const isCheckingSavings = quoteLoading && items.length > 0;
   const deliveryUnavailable = delivery?.isDeliveryEnabled === false;
-  const canPlaceOrder = total >= MINIMUM_ORDER && !deliveryUnavailable;
+  const canPlaceOrder = paidTotal >= MINIMUM_ORDER && !deliveryUnavailable;
   const update = (name) => (event) =>
     setForm({ ...form, [name]: event.target.value });
   const validate = () => {
@@ -177,13 +197,19 @@ export default function Checkout() {
       const { data } = await api.post("/offers/quote", { couponCode: code });
       setDiscountQuote(data);
       setCouponCode(code);
+      const appliedItemDiscount = Number(data.applied?.itemDiscount || 0);
+      const appliedExtraDiscount = Number(
+        data.applied?.extraDiscount ?? data.applied?.discount ?? 0,
+      );
       setCouponMessage(
         data.applied?.type === "coupon"
-          ? `${data.applied.label} applied. You saved Rs. ${formatMoney(data.applied.discount)}.`
-          : data.coupon && data.automaticOffer
-            ? `${data.coupon.code} is valid and saves Rs. ${formatMoney(data.coupon.discount)}, but ${automaticSavingName(data.automaticOffer)} saves Rs. ${formatMoney(data.applied?.discount || data.automaticOffer.discount)}. Best discount applied automatically.`
+          ? appliedItemDiscount > 0
+            ? `${data.applied.label} applied. Coupon saved Rs. ${formatMoney(appliedExtraDiscount)}, plus item offers saved Rs. ${formatMoney(appliedItemDiscount)}.`
+            : `${data.applied.label} applied. You saved Rs. ${formatMoney(appliedExtraDiscount)}.`
+          : data.coupon && data.extraAutomaticOffer
+            ? `${data.coupon.code} is valid and saves Rs. ${formatMoney(data.coupon.discount)}, but ${automaticSavingName(data.extraAutomaticOffer)} saves Rs. ${formatMoney(data.extraAutomaticOffer.discount)}. Best extra saving applied automatically.`
             : data.automaticOffer
-              ? `${automaticSavingName(data.automaticOffer)} gives the better saving of Rs. ${formatMoney(data.applied?.discount || data.automaticOffer.discount)}.`
+              ? `${automaticSavingName(data.automaticOffer)} gives the best saving of Rs. ${formatMoney(data.automaticOffer.discount)}.`
               : "No discount is available for this order.",
       );
     } catch (error) {
@@ -381,6 +407,11 @@ export default function Checkout() {
                   const itemOffer = activeOfferDetails.find((detail) =>
                     detailMatchesItem(detail, item),
                   );
+                  const freeQuantity = Number(itemOffer?.freeQuantity || 0);
+                  const lineAmount = Number(
+                    itemOffer?.lineSubtotal ??
+                      (unitPrice ?? product?.price ?? 0) * quantity,
+                  );
                   return (
                     product && (
                       <div
@@ -391,6 +422,12 @@ export default function Checkout() {
                           <span className="block line-clamp-1">
                             {quantity} x {product.name}
                           </span>
+                          {freeQuantity > 0 && (
+                            <small className="block mt-1 text-xs font-bold text-red-700">
+                              + {freeQuantity} free with{" "}
+                              {itemOffer.offerLabel}
+                            </small>
+                          )}
                           {itemOffer && (
                             <small className="block mt-1 text-xs font-bold text-green-700">
                               {itemOffer.offerName} ({itemOffer.offerLabel}) -
@@ -399,8 +436,7 @@ export default function Checkout() {
                           )}
                         </span>
                         <b className="shrink-0">
-                          Rs.{" "}
-                          {formatMoney((unitPrice ?? product.price) * quantity)}
+                          Rs. {formatMoney(lineAmount)}
                         </b>
                       </div>
                     )
@@ -409,7 +445,9 @@ export default function Checkout() {
               )}
             </div>
             {isCheckingSavings && <CheckingSavings />}
-            {!isCheckingSavings && discountQuote?.automaticOffer && (
+            {!isCheckingSavings &&
+              discountQuote?.automaticOffer &&
+              appliedDiscount?.type !== "coupon" && (
               <section className="px-3 py-3 mt-5 border rounded-xl border-amber-200 bg-amber-50">
                 <b className="block text-xs text-amber-800">
                   Automatic savings:{" "}
@@ -525,7 +563,7 @@ export default function Checkout() {
                       <span className="block mt-1 text-xs leading-5 text-gray-500">
                         This coupon saves Rs.{" "}
                         {formatMoney(discountQuote.coupon.discount)}, but{" "}
-                        {automaticSavingName(discountQuote.automaticOffer)} is
+                        {automaticSavingName(discountQuote.extraAutomaticOffer)} is
                         giving the better discount right now.
                       </span>
                     </div>
@@ -548,16 +586,16 @@ export default function Checkout() {
                   <b className="text-gray-900">Rs. {formatMoney(total)}</b>
                 )}
               </div>
-              {!isCheckingSavings && discount > 0 && (
+              {!isCheckingSavings && itemDiscount > 0 && (
                 <div className="flex justify-between text-green-700">
-                  <span>
-                    {appliedDiscount?.type === "coupon"
-                      ? "Coupon discount"
-                      : appliedDiscount?.kind === "items"
-                        ? "Item offers"
-                        : "Automatic offer"}
-                  </span>
-                  <b>- Rs. {formatMoney(discount)}</b>
+                  <span>Item offers</span>
+                  <b>- Rs. {formatMoney(itemDiscount)}</b>
+                </div>
+              )}
+              {!isCheckingSavings && extraDiscount > 0 && (
+                <div className="flex justify-between text-green-700">
+                  <span>{extraSavingLabel(appliedDiscount)}</span>
+                  <b>- Rs. {formatMoney(extraDiscount)}</b>
                 </div>
               )}
               {!cartLoading && !isCheckingSavings && delivery && (

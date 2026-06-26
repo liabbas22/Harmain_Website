@@ -9,24 +9,55 @@ const requestError = (message) => { const error = new Error(message); error.stat
 const numberValue = (value, label, { min = 0, integer = false } = {}) => { const parsed = Number(value); if (!Number.isFinite(parsed) || parsed < min || (integer && !Number.isInteger(parsed))) throw requestError(`${label} is invalid.`); return parsed; };
 const dateValue = (value, label, { optional = false } = {}) => { if (optional && (value === undefined || value === null || value === "")) return null; const parsed = new Date(value); if (Number.isNaN(parsed.getTime())) throw requestError(`${label} is invalid.`); return parsed; };
 const objectId = (value, label) => { if (!mongoose.isValidObjectId(value)) throw requestError(`${label} is invalid.`); return value; };
+const normalizeDealType = (body) => {
+  const raw = String(body.dealType || body.type || "").trim().toLowerCase().replaceAll("-", "_").replaceAll(" ", "_");
+  if (["buy_x_get_y", "bogo", "buy1get1", "buy_1_get_1", "buy_one_get_one"].includes(raw)) return "buy_x_get_y";
+  if (["combo", "combo_deal", "bundle"].includes(raw)) return "combo";
+  if (["discount", "standard", "normal"].includes(raw)) return "discount";
+  if (body.comboPrice !== undefined && body.comboPrice !== null && body.comboPrice !== "") return "combo";
+  if (body.buyQuantity !== undefined || body.getQuantity !== undefined) return "buy_x_get_y";
+  return "discount";
+};
 
 const offerPayload = (body) => {
   const name = typeof body.name === "string" ? body.name.trim() : "";
   if (name.length < 3) throw requestError("Offer name must be at least 3 characters.");
-  const discountType = body.discountType;
+  const dealType = normalizeDealType(body);
+  if (!["discount", "buy_x_get_y", "combo"].includes(dealType)) throw requestError("Deal type is invalid.");
+  const discountType = dealType === "discount" ? (body.discountType || "percentage") : "fixed";
   if (!["percentage", "fixed"].includes(discountType)) throw requestError("Discount type is invalid.");
-  const value = numberValue(body.value, "Discount value", { min: 0.01 });
-  if (discountType === "percentage" && value > 100) throw requestError("Percentage discount cannot exceed 100.");
-  const appliesTo = body.appliesTo;
+  const value = dealType === "discount" ? numberValue(body.value, "Discount value", { min: 0.01 }) : 0;
+  if (dealType === "discount" && discountType === "percentage" && value > 100) throw requestError("Percentage discount cannot exceed 100.");
+  const appliesTo = dealType === "combo" ? "products" : body.appliesTo;
   if (!["order", "category", "products"].includes(appliesTo)) throw requestError("Offer target is invalid.");
+  if (dealType === "buy_x_get_y" && appliesTo === "order") throw requestError("Buy X Get Y must target products or a category.");
   const category = appliesTo === "category" ? objectId(body.category, "Category") : null;
   const products = appliesTo === "products" ? [...new Set((Array.isArray(body.products) ? body.products : []).map((id) => objectId(id, "Product")))] : [];
   if (appliesTo === "products" && !products.length) throw requestError("Select at least one product for this offer.");
+  if (dealType === "combo" && products.length < 2) throw requestError("Select at least two products for a combo deal.");
   const startsAt = dateValue(body.startsAt || new Date(), "Start date");
   const expiresAt = dateValue(body.expiresAt, "Expiry date", { optional: true });
   if (expiresAt && expiresAt <= startsAt) throw requestError("Expiry date must be later than the start date.");
   const maxDiscount = body.maxDiscount === undefined || body.maxDiscount === null || body.maxDiscount === "" ? null : numberValue(body.maxDiscount, "Maximum discount", { min: 0.01 });
-  return { name, description: typeof body.description === "string" ? body.description.trim() : "", discountType, value, appliesTo, category, products, minimumOrder: numberValue(body.minimumOrder ?? 0, "Minimum order"), maxDiscount: discountType === "percentage" ? maxDiscount : null, priority: numberValue(body.priority ?? 0, "Priority", { integer: true }), isActive: body.isActive !== false, startsAt, expiresAt };
+  return {
+    name,
+    description: typeof body.description === "string" ? body.description.trim() : "",
+    dealType,
+    discountType,
+    value,
+    appliesTo,
+    category,
+    products,
+    buyQuantity: dealType === "buy_x_get_y" ? numberValue(body.buyQuantity ?? 1, "Buy quantity", { min: 1, integer: true }) : 1,
+    getQuantity: dealType === "buy_x_get_y" ? numberValue(body.getQuantity ?? 1, "Free quantity", { min: 1, integer: true }) : 1,
+    comboPrice: dealType === "combo" ? numberValue(body.comboPrice, "Combo price", { min: 0.01 }) : 0,
+    minimumOrder: numberValue(body.minimumOrder ?? 0, "Minimum order"),
+    maxDiscount: dealType === "discount" && discountType === "percentage" ? maxDiscount : null,
+    priority: numberValue(body.priority ?? 0, "Priority", { integer: true }),
+    isActive: body.isActive !== false,
+    startsAt,
+    expiresAt,
+  };
 };
 
 const withTargets = (query) => query.populate("category", "name").populate("products", "name");
@@ -38,15 +69,30 @@ export const quoteBestDiscount = asyncHandler(async (req, res) => {
   const cart = await Cart.findOne({ user: req.user._id }).populate("items.product");
   const items = cart?.items.filter((item) => item.product) || [];
   if (!items.length) return res.status(400).json({ message: "Your cart is empty" });
-  const subtotal = items.reduce((sum, item) => sum + (item.unitPrice ?? item.product.price) * item.quantity, 0);
-  const selection = await selectBestDiscount({ items, subtotal, userId: req.user._id, couponCode: req.body.couponCode || "" });
+  const paidSubtotal = items.reduce((sum, item) => sum + (item.unitPrice ?? item.product.price) * item.quantity, 0);
+  const selection = await selectBestDiscount({ items, subtotal: paidSubtotal, userId: req.user._id, couponCode: req.body.couponCode || "" });
+  const subtotal = selection.subtotal ?? paidSubtotal;
   const discount = selection.applied?.discount || 0;
-  const delivery = await calculateDeliveryCharge(subtotal);
+  const delivery = await calculateDeliveryCharge(paidSubtotal);
   res.json({
     subtotal,
+    paidSubtotal,
+    grossSubtotalIncrease: selection.grossSubtotalIncrease || 0,
     automaticOffer: automaticOfferSummary(selection.automaticOffer),
+    itemOffer: automaticOfferSummary(selection.itemOffer),
+    extraAutomaticOffer: automaticOfferSummary(selection.extraAutomaticOffer),
     coupon: selection.couponResult ? { code: selection.couponResult.coupon.code, discount: selection.couponResult.discount } : null,
-    applied: selection.applied ? { type: selection.applied.type, label: selection.applied.label, discount: selection.applied.discount, kind: selection.applied.kind || null, details: selection.applied.details || [] } : null,
+    applied: selection.applied ? {
+      type: selection.applied.type,
+      label: selection.applied.label,
+      discount: selection.applied.discount,
+      itemDiscount: selection.applied.itemDiscount || 0,
+      extraDiscount: selection.applied.extraDiscount || 0,
+      couponDiscount: selection.applied.couponDiscount || 0,
+      offerDiscount: selection.applied.offerDiscount || 0,
+      kind: selection.applied.kind || null,
+      details: selection.applied.details || [],
+    } : null,
     delivery,
     deliveryFee: delivery.deliveryFee,
     total: Math.max(0, subtotal - discount),

@@ -35,6 +35,12 @@ const refundStatuses = [
 ];
 const MINIMUM_ORDER_AMOUNT = 500;
 const BUSINESS_TIME_ZONE = process.env.BUSINESS_TIME_ZONE || "Asia/Karachi";
+const cartLineKey = ({ product, optionName = "", specialInstructions = "" }) =>
+  [
+    (product?._id || product || "").toString(),
+    optionName || "",
+    specialInstructions || "",
+  ].join("::");
 const orderFilterStatuses = {
   pending: ["placed", "confirmed"],
   preparing: ["preparing", "out_for_delivery"],
@@ -162,7 +168,7 @@ export const checkout = asyncHandler(async (req, res) => {
       .status(400)
       .json({ message: "One or more items are unavailable or out of stock" });
 
-  const items = cart.items.map(
+  const baseItems = cart.items.map(
     ({ product, quantity, optionName, specialInstructions, unitPrice }) => ({
       product: product._id,
       name: product.name,
@@ -173,18 +179,52 @@ export const checkout = asyncHandler(async (req, res) => {
       quantity,
     }),
   );
-  const subtotal = items.reduce(
+  const paidSubtotal = baseItems.reduce(
     (sum, item) => sum + item.price * item.quantity,
     0,
   );
-  if (subtotal < MINIMUM_ORDER_AMOUNT)
+  if (paidSubtotal < MINIMUM_ORDER_AMOUNT)
     return res
       .status(400)
       .json({ message: `Minimum order amount is Rs. ${MINIMUM_ORDER_AMOUNT}` });
 
-  const discountSelection = await selectBestDiscount({ items: cart.items, subtotal, userId: req.user._id, couponCode });
+  const discountSelection = await selectBestDiscount({ items: cart.items, subtotal: paidSubtotal, userId: req.user._id, couponCode });
   const discount = discountSelection.applied?.discount || 0;
-  const delivery = await calculateDeliveryCharge(subtotal);
+  const couponDiscount = discountSelection.applied?.couponDiscount || 0;
+  const offerDiscount = discountSelection.applied?.offerDiscount || 0;
+  const subtotal = discountSelection.subtotal ?? paidSubtotal;
+  const freeQuantityByLine = new Map(
+    (discountSelection.applied?.details || [])
+      .filter((detail) => Number(detail.freeQuantity || 0) > 0)
+      .map((detail) => [detail.lineKey, Number(detail.freeQuantity || 0)]),
+  );
+  const items = baseItems.map((item) => {
+    const freeQuantity = freeQuantityByLine.get(cartLineKey(item)) || 0;
+    return {
+      ...item,
+      freeQuantity,
+      grossQuantity: item.quantity + freeQuantity,
+    };
+  });
+  const deliveredByProduct = new Map();
+  items.forEach((item) => {
+    const id = item.product.toString();
+    const current = deliveredByProduct.get(id) || {
+      product: requestedByProduct.get(id).product,
+      quantity: 0,
+    };
+    current.quantity += item.grossQuantity;
+    deliveredByProduct.set(id, current);
+  });
+  const hasInsufficientPromoStock = [...deliveredByProduct.values()].some(
+    ({ product, quantity }) => quantity > product.stock,
+  );
+  if (hasInsufficientPromoStock)
+    return res
+      .status(400)
+      .json({ message: "One or more free offer items are out of stock" });
+
+  const delivery = await calculateDeliveryCharge(paidSubtotal);
   if (!delivery.isDeliveryEnabled) return res.status(400).json({ message: "Delivery is currently unavailable" });
   const deliveryFee = delivery.deliveryFee;
   if (discountSelection.applied?.type === "coupon") await claimCouponUsage(discountSelection.applied.coupon);
@@ -198,12 +238,12 @@ export const checkout = asyncHandler(async (req, res) => {
       paymentMethod,
       subtotal,
       coupon: discountSelection.applied?.type === "coupon"
-        ? couponSnapshot(discountSelection.applied.coupon, discount)
+        ? couponSnapshot(discountSelection.applied.coupon, couponDiscount)
         : undefined,
       offer: discountSelection.applied?.type === "offer"
-        ? offerSnapshot(discountSelection.applied.offer, discount)
+        ? offerSnapshot(discountSelection.applied.offer, offerDiscount || discount)
         : undefined,
-      offerBreakdown: discountSelection.applied?.type === "offer"
+      offerBreakdown: discountSelection.applied
         ? offerBreakdownSnapshot(discountSelection.applied.details)
         : [],
       discount,
@@ -218,7 +258,7 @@ export const checkout = asyncHandler(async (req, res) => {
       );
     throw error;
   }
-  const requestedProducts = [...requestedByProduct.values()];
+  const requestedProducts = [...deliveredByProduct.values()];
   const updatedProducts = await Promise.all(
     requestedProducts.map(({ product, quantity }) =>
       Product.findOneAndUpdate(

@@ -119,7 +119,11 @@ const toOfferEditor = (offer) => ({
     ...offer,
     category: offer.category?._id || offer.category || "",
     products: (offer.products || []).map((product) => product._id || product),
+    dealType: offer.dealType || "discount",
     value: String(offer.value ?? ""),
+    buyQuantity: String(offer.buyQuantity ?? 1),
+    getQuantity: String(offer.getQuantity ?? 1),
+    comboPrice: offer.comboPrice ?? "",
     minimumOrder: String(offer.minimumOrder ?? 0),
     maxDiscount: offer.maxDiscount ?? "",
     priority: String(offer.priority ?? 0),
@@ -131,14 +135,18 @@ const toOfferEditor = (offer) => ({
 const createOfferPayload = (values) => ({
   name: values.name.trim(),
   description: values.description.trim(),
-  discountType: values.discountType,
-  value: Number(values.value),
-  appliesTo: values.appliesTo,
-  category: values.appliesTo === "category" ? values.category : null,
-  products: values.appliesTo === "products" ? values.products : [],
+  dealType: values.dealType,
+  discountType: values.dealType === "discount" ? values.discountType : "fixed",
+  value: values.dealType === "discount" ? Number(values.value) : 0,
+  appliesTo: values.dealType === "combo" ? "products" : values.appliesTo,
+  category: values.dealType !== "combo" && values.appliesTo === "category" ? values.category : null,
+  products: values.appliesTo === "products" || values.dealType === "combo" ? values.products : [],
+  buyQuantity: values.dealType === "buy_x_get_y" ? Number(values.buyQuantity || 1) : 1,
+  getQuantity: values.dealType === "buy_x_get_y" ? Number(values.getQuantity || 1) : 1,
+  comboPrice: values.dealType === "combo" ? Number(values.comboPrice || 0) : 0,
   minimumOrder: Number(values.minimumOrder || 0),
   maxDiscount:
-    values.discountType === "percentage" && values.maxDiscount !== ""
+    values.dealType === "discount" && values.discountType === "percentage" && values.maxDiscount !== ""
       ? Number(values.maxDiscount)
       : null,
   priority: Number(values.priority || 0),

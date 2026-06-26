@@ -1,6 +1,7 @@
 import Cart from "../models/Cart.js";
 import Product from "../models/Product.js";
 import asyncHandler from "../utils/asyncHandler.js";
+import { getComboSuggestionsForCart } from "../utils/offerService.js";
 
 const populate = (cart) =>
   cart.populate({
@@ -13,6 +14,14 @@ const getCart = (user) =>
     { $setOnInsert: { user } },
     { new: true, upsert: true },
   );
+const cartPayload = async (cart) => {
+  const populatedCart = await populate(cart);
+  const payload = populatedCart.toObject ? populatedCart.toObject() : populatedCart;
+  return {
+    ...payload,
+    comboSuggestions: await getComboSuggestionsForCart(populatedCart.items || []),
+  };
+};
 const normalizeSpecialInstructions = (value) =>
   typeof value === "string" ? value.trim() : "";
 const selected = (product, optionName) => {
@@ -27,7 +36,7 @@ const selected = (product, optionName) => {
 };
 
 export const getUserCart = asyncHandler(async (req, res) =>
-  res.json(await populate(await getCart(req.user._id))),
+  res.json(await cartPayload(await getCart(req.user._id))),
 );
 
 export const addItem = asyncHandler(async (req, res) => {
@@ -78,7 +87,7 @@ export const addItem = asyncHandler(async (req, res) => {
       ...choice,
     });
   await cart.save();
-  res.status(201).json(await populate(cart));
+  res.status(201).json(await cartPayload(cart));
 });
 
 export const updateItem = asyncHandler(async (req, res) => {
@@ -118,7 +127,7 @@ export const updateItem = asyncHandler(async (req, res) => {
 
   item.quantity = quantity;
   await cart.save();
-  res.json(await populate(cart));
+  res.json(await cartPayload(cart));
 });
 
 export const removeItem = asyncHandler(async (req, res) => {
@@ -137,12 +146,12 @@ export const removeItem = asyncHandler(async (req, res) => {
   if (before === cart.items.length)
     return res.status(404).json({ message: "Cart item not found" });
   await cart.save();
-  res.json(await populate(cart));
+  res.json(await cartPayload(cart));
 });
 
 export const clearCart = asyncHandler(async (req, res) => {
   const cart = await getCart(req.user._id);
   cart.items = [];
   await cart.save();
-  res.json(cart);
+  res.json(await cartPayload(cart));
 });

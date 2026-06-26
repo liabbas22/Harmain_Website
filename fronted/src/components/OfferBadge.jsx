@@ -3,6 +3,9 @@ import React, { useEffect, useMemo, useState } from "react";
 const formatOfferValue = (offer) => {
   if (!offer) return "";
   if (offer.label) return offer.label;
+  if (offer.dealType === "buy_x_get_y")
+    return `Buy ${offer.buyQuantity || 1} Get ${offer.getQuantity || 1}`;
+  if (offer.dealType === "combo") return "Combo Deal";
   if (offer.discountType === "percentage")
     return `${Number(offer.value || 0)}% OFF`;
   return `Rs. ${Number(offer.value || 0)} OFF`;
