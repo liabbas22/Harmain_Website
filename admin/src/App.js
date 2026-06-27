@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { adminApi } from "./api/adminApi";
 import { emptyCategory, emptyCoupon, emptyOffer, emptyProduct, emptyRider } from "./constants/admin";
 import AdminShell from "./components/layout/AdminShell";
+import AlertDialog from "./components/ui/AlertDialog";
 import ConfirmDialog from "./components/ui/ConfirmDialog";
 import Toast from "./components/ui/Toast";
 import LoginScreen from "./features/auth/LoginScreen";
@@ -168,6 +169,7 @@ function App() {
   const [riderEditor, setRiderEditor] = useState(null);
   const [couponEditor, setCouponEditor] = useState(null);
   const [offerEditor, setOfferEditor] = useState(null);
+  const [alertDialog, setAlertDialog] = useState(null);
   const [confirmation, setConfirmation] = useState(null);
   const [cancelEditor, setCancelEditor] = useState(null);
   const [orderDetails, setOrderDetails] = useState(null);
@@ -195,6 +197,7 @@ function App() {
     setRiderEditor(null);
     setCouponEditor(null);
     setOfferEditor(null);
+    setAlertDialog(null);
     setConfirmation(null);
     setCancelEditor(null);
     setOrderDetails(null);
@@ -479,7 +482,16 @@ function App() {
       notify(editor.id ? "Offer updated." : "Offer created.");
       await loadOffers();
     } catch (requestError) {
-      notify(requestError.message || "Offer could not be saved.", "error");
+      if (requestError.status === 409) {
+        setAlertDialog({
+          title: "Offer conflict",
+          message:
+            requestError.message ||
+            "This product already has an active offer. End that offer before adding another one.",
+        });
+      } else {
+        notify(requestError.message || "Offer could not be saved.", "error");
+      }
     } finally {
       setBusyAction("");
     }
@@ -641,6 +653,7 @@ function App() {
       {offerEditor && <OfferEditor editor={offerEditor} categories={categories} products={products} onChange={setOfferEditor} onClose={() => setOfferEditor(null)} onSave={saveOffer} busy={busyAction === "offer-save"} />}
       {riderEditor && <RiderEditor editor={riderEditor} onChange={setRiderEditor} onClose={() => setRiderEditor(null)} onSave={saveRider} busy={busyAction === "rider-save"} />}
       {cancelEditor && <CancelOrderModal order={cancelEditor.order} onClose={() => setCancelEditor(null)} onConfirm={saveCancellation} busy={busyAction === `order-${cancelEditor.order._id}`} />}
+      {alertDialog && <AlertDialog title={alertDialog.title} message={alertDialog.message} onClose={() => setAlertDialog(null)} />}
       {confirmation && <ConfirmDialog title={confirmation.title} message={confirmation.message} onCancel={() => setConfirmation(null)} onConfirm={confirmDelete} />}
       {orderDetails && <OrderDetailsModal order={orderDetails} riders={riders} onAssignRider={assignRider} assigning={busyAction === `rider-${orderDetails._id}`} onUpdateOrder={updateOrder} updatingOrder={busyAction === `order-${orderDetails._id}`} onClose={() => setOrderDetails(null)} />}
       <Toast toast={toast} />

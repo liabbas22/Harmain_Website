@@ -1,11 +1,12 @@
 import mongoose from "mongoose";
 import Cart from "../models/Cart.js";
 import Offer from "../models/Offer.js";
+import Product from "../models/Product.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { calculateDeliveryCharge } from "../utils/deliverySettingsService.js";
 import { automaticOfferSummary, selectBestDiscount } from "../utils/offerService.js";
 
-const requestError = (message) => { const error = new Error(message); error.statusCode = 400; return error; };
+const requestError = (message, statusCode = 400) => { const error = new Error(message); error.statusCode = statusCode; return error; };
 const numberValue = (value, label, { min = 0, integer = false } = {}) => { const parsed = Number(value); if (!Number.isFinite(parsed) || parsed < min || (integer && !Number.isInteger(parsed))) throw requestError(`${label} is invalid.`); return parsed; };
 const dateValue = (value, label, { optional = false } = {}) => { if (optional && (value === undefined || value === null || value === "")) return null; const parsed = new Date(value); if (Number.isNaN(parsed.getTime())) throw requestError(`${label} is invalid.`); return parsed; };
 const objectId = (value, label) => { if (!mongoose.isValidObjectId(value)) throw requestError(`${label} is invalid.`); return value; };
@@ -60,10 +61,135 @@ const offerPayload = (body) => {
   };
 };
 
+const idString = (value) => String(value?._id || value || "");
+const isProductTargetedOffer = (offer) =>
+  offer.isActive !== false && offer.appliesTo !== "order";
+const overlapFilter = ({ startsAt, expiresAt }) => ({
+  startsAt: { $lte: expiresAt || new Date("9999-12-31T23:59:59.999Z") },
+  $or: [{ expiresAt: null }, { expiresAt: { $gt: startsAt } }],
+});
+const offerTargetProductDocs = (offer, productById, productsByCategory) => {
+  if (offer.appliesTo === "products") {
+    return (offer.products || [])
+      .map((product) => productById.get(idString(product)))
+      .filter(Boolean);
+  }
+  if (offer.appliesTo === "category") {
+    return productsByCategory.get(idString(offer.category)) || [];
+  }
+  return [];
+};
+const formattedOfferEnd = (offer) =>
+  offer.expiresAt
+    ? `until ${new Date(offer.expiresAt).toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      })}`
+    : "with no expiry date";
+const assertNoProductOfferConflict = async (payload, excludeId = null) => {
+  if (!isProductTargetedOffer(payload)) return;
+
+  const query = {
+    isActive: true,
+    appliesTo: { $in: ["category", "products"] },
+    ...overlapFilter(payload),
+  };
+  if (excludeId) query._id = { $ne: excludeId };
+
+  const existingOffers = await Offer.find(query)
+    .populate("products", "name category")
+    .populate("category", "name")
+    .lean();
+  if (!existingOffers.length) return;
+
+  const categoryIds = [
+    payload.category,
+    ...existingOffers.map((offer) => offer.category),
+  ]
+    .map(idString)
+    .filter(Boolean);
+  const productIds = [
+    ...(payload.products || []),
+    ...existingOffers.flatMap((offer) => offer.products || []),
+  ]
+    .map(idString)
+    .filter(Boolean);
+
+  const productQuery = [];
+  if (productIds.length) productQuery.push({ _id: { $in: productIds } });
+  if (categoryIds.length)
+    productQuery.push({ category: { $in: [...new Set(categoryIds)] } });
+  if (!productQuery.length) return;
+
+  const products = await Product.find({ $or: productQuery })
+    .select("name category")
+    .lean();
+  const productById = new Map(products.map((product) => [idString(product), product]));
+  const productsByCategory = products.reduce((map, product) => {
+    const categoryId = idString(product.category);
+    if (!map.has(categoryId)) map.set(categoryId, []);
+    map.get(categoryId).push(product);
+    return map;
+  }, new Map());
+
+  const targetProducts = offerTargetProductDocs(
+    payload,
+    productById,
+    productsByCategory,
+  );
+  const targetIds = new Set(targetProducts.map(idString));
+  if (!targetIds.size) return;
+
+  const conflict = existingOffers
+    .map((offer) => {
+      const productsForOffer = offerTargetProductDocs(
+        offer,
+        productById,
+        productsByCategory,
+      );
+      const conflictingProducts = productsForOffer.filter((product) =>
+        targetIds.has(idString(product)),
+      );
+      return conflictingProducts.length
+        ? { offer, conflictingProducts }
+        : null;
+    })
+    .filter(Boolean)[0];
+
+  if (!conflict) return;
+
+  const productNames = conflict.conflictingProducts
+    .slice(0, 4)
+    .map((product) => product.name)
+    .join(", ");
+  const extraCount = conflict.conflictingProducts.length - 4;
+  const suffix = extraCount > 0 ? ` and ${extraCount} more` : "";
+  throw requestError(
+    `Offer conflict: ${productNames}${suffix} already has "${conflict.offer.name}" ${formattedOfferEnd(conflict.offer)}. Disable, end, or wait for that offer to expire before adding another offer on the same product.`,
+    409,
+  );
+};
+
 const withTargets = (query) => query.populate("category", "name").populate("products", "name");
 export const getOffers = asyncHandler(async (_req, res) => res.json(await withTargets(Offer.find().sort({ createdAt: -1 }))));
-export const createOffer = asyncHandler(async (req, res) => { const offer = await Offer.create(offerPayload(req.body)); res.status(201).json(await withTargets(Offer.findById(offer._id))); });
-export const updateOffer = asyncHandler(async (req, res) => { const current = await Offer.findById(req.params.id); if (!current) return res.status(404).json({ message: "Offer not found" }); const offer = await Offer.findByIdAndUpdate(req.params.id, offerPayload({ ...current.toObject(), ...req.body }), { new: true, runValidators: true }); res.json(await withTargets(Offer.findById(offer._id))); });
+export const createOffer = asyncHandler(async (req, res) => {
+  const payload = offerPayload(req.body);
+  await assertNoProductOfferConflict(payload);
+  const offer = await Offer.create(payload);
+  res.status(201).json(await withTargets(Offer.findById(offer._id)));
+});
+export const updateOffer = asyncHandler(async (req, res) => {
+  const current = await Offer.findById(req.params.id);
+  if (!current) return res.status(404).json({ message: "Offer not found" });
+  const payload = offerPayload({ ...current.toObject(), ...req.body });
+  await assertNoProductOfferConflict(payload, current._id);
+  const offer = await Offer.findByIdAndUpdate(req.params.id, payload, {
+    new: true,
+    runValidators: true,
+  });
+  res.json(await withTargets(Offer.findById(offer._id)));
+});
 export const deleteOffer = asyncHandler(async (req, res) => { const offer = await Offer.findByIdAndDelete(req.params.id); if (!offer) return res.status(404).json({ message: "Offer not found" }); res.json({ message: "Offer deleted" }); });
 export const quoteBestDiscount = asyncHandler(async (req, res) => {
   const cart = await Cart.findOne({ user: req.user._id }).populate("items.product");

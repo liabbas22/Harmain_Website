@@ -6,6 +6,7 @@ import {
   getRiders,
   login,
   register,
+  updateMe,
   updateRider,
 } from "../controllers/authController.js";
 import { authorize, protect } from "../middleware/authMiddleware.js";
@@ -14,6 +15,7 @@ router.post("/register", register);
 router.post("/login", login);
 router.post("/admin/login", adminLogin);
 router.get("/me", protect, getMe);
+router.patch("/me", protect, updateMe);
 router.get("/admin/me", protect, authorize("admin"), getMe);
 router
   .route("/admin/riders")

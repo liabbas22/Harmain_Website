@@ -37,11 +37,16 @@ const Navbar = () => {
   const [cartTotal, setCartTotal] = useState(0);
 
   useEffect(() => {
-    try {
-      setUser(JSON.parse(localStorage.getItem("harmain_user") || "null"));
-    } catch {
-      setUser(null);
-    }
+    const syncUser = () => {
+      try {
+        setUser(JSON.parse(localStorage.getItem("harmain_user") || "null"));
+      } catch {
+        setUser(null);
+      }
+    };
+    syncUser();
+    window.addEventListener("harmain-user-updated", syncUser);
+    return () => window.removeEventListener("harmain-user-updated", syncUser);
   }, [location.pathname]);
 
   useEffect(() => {
@@ -459,7 +464,67 @@ const Navbar = () => {
               </Link>
               <div className="my-2 border-t"></div>
               <div className="pb-4 border-b border-gray-200">
-                {user ? <div className="space-y-3"><div className="flex items-center gap-3 p-3 rounded-xl bg-red-50"><span className="flex items-center justify-center w-10 h-10 font-bold text-white bg-red-700 rounded-full">{user.name?.[0]?.toUpperCase() || "U"}</span><div><p className="text-sm font-bold text-gray-800">{user.name}</p><p className="text-xs text-gray-500">{user.email}</p></div></div><button onClick={handleLogout} className="w-full py-3 text-sm font-bold text-red-700 border border-red-200 rounded-xl hover:bg-red-50">Logout</button></div> : <div><Link to="/login" onClick={handleCloseMenu} className="flex items-center gap-3 p-3 text-white bg-red-700 rounded-xl"><FiUser /><span className="text-sm font-bold">Sign in</span></Link><Link to="/register" onClick={handleCloseMenu} className="block mt-3 text-xs font-bold text-center text-red-700">Create an account</Link></div>}
+                {user ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3 p-3 rounded-xl bg-red-50">
+                      <span className="flex items-center justify-center w-10 h-10 font-bold text-white bg-red-700 rounded-full">
+                        {user.name?.[0]?.toUpperCase() || "U"}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-gray-800 truncate">
+                          {user.name}
+                        </p>
+                        <p className="text-xs text-gray-500 truncate">
+                          {user.email}
+                        </p>
+                      </div>
+                    </div>
+                    <Link
+                      to="/profile"
+                      onClick={handleCloseMenu}
+                      className="flex items-center w-full gap-3 px-4 py-3 transition-all duration-300 bg-white border border-red-100 rounded-xl hover:bg-red-50"
+                    >
+                      <FiUser className="w-5 h-5 text-red-700" />
+                      <span className="text-sm font-bold text-gray-800">
+                        My profile
+                      </span>
+                    </Link>
+                    <Link
+                      to="/orders"
+                      onClick={handleCloseMenu}
+                      className="flex items-center w-full gap-3 px-4 py-3 transition-all duration-300 bg-white border border-red-100 rounded-xl hover:bg-red-50"
+                    >
+                      <RiShoppingBag3Fill className="w-5 h-5 text-red-700" />
+                      <span className="text-sm font-bold text-gray-800">
+                        Order history
+                      </span>
+                    </Link>
+                    <button
+                      onClick={handleLogout}
+                      className="w-full py-3 text-sm font-bold text-red-700 border border-red-200 rounded-xl hover:bg-red-50"
+                    >
+                      Logout
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <Link
+                      to="/login"
+                      onClick={handleCloseMenu}
+                      className="flex items-center gap-3 p-3 text-white bg-red-700 rounded-xl"
+                    >
+                      <FiUser />
+                      <span className="text-sm font-bold">Sign in</span>
+                    </Link>
+                    <Link
+                      to="/register"
+                      onClick={handleCloseMenu}
+                      className="block mt-3 text-xs font-bold text-center text-red-700"
+                    >
+                      Create an account
+                    </Link>
+                  </div>
+                )}
               </div>
 
               <div className="flex flex-col gap-2 px-2">

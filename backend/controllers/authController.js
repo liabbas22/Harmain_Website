@@ -6,6 +6,7 @@ const payload = (user) => ({
   id: user._id,
   name: user.name,
   email: user.email,
+  phone: user.phone || "",
   role: user.role,
 });
 const riderPayload = (rider) => ({
@@ -72,6 +73,25 @@ export const adminLogin = asyncHandler(async (req, res) => {
 export const getMe = asyncHandler(async (req, res) =>
   res.json({ user: payload(req.user) }),
 );
+
+export const updateMe = asyncHandler(async (req, res) => {
+  const { name, phone } = req.body;
+  if (name !== undefined) {
+    if (typeof name !== "string" || name.trim().length < 2)
+      return res.status(400).json({ message: "Enter a valid full name" });
+    req.user.name = name.trim();
+  }
+  if (phone !== undefined) {
+    if (
+      phone &&
+      (typeof phone !== "string" || !/^\+?\d[\d\s-]{8,}$/.test(phone.trim()))
+    )
+      return res.status(400).json({ message: "Enter a valid phone number" });
+    req.user.phone = typeof phone === "string" ? phone.trim() : "";
+  }
+  await req.user.save();
+  res.json({ user: payload(req.user) });
+});
 
 export const getRiders = asyncHandler(async (_req, res) => {
   const riders = await User.find({ role: "rider" })
