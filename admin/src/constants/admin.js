@@ -42,6 +42,7 @@ export const navigationItems = [
   ["products", "Products"],
   ["categories", "Categories"],
   ["orders", "Orders"],
+  ["customers", "Customers"],
   ["coupons", "Coupons"],
   ["offers", "Offers"],
   ["delivery", "Delivery settings"],
@@ -57,6 +58,19 @@ export const emptyProduct = (category = "") => ({
   stock: "0",
   tags: "",
   isAvailable: true,
+  isFeatured: false,
+  isPopular: false,
+  isComboMeal: false,
+  comboItems: [],
+  displayOrder: "0",
+  addOns: [],
+  availabilitySchedule: {
+    isEnabled: false,
+    days: [],
+    startTime: "",
+    endTime: "",
+    message: "",
+  },
   options: [],
 });
 

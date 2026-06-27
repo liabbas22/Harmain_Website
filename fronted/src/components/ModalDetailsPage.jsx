@@ -10,6 +10,8 @@ const ModalDetailsPage = ({
   item,
   selectedOption,
   setSelectedOption,
+  selectedAddOns = [],
+  setSelectedAddOns,
   quantity,
   setQuantity,
   specialInstructions,
@@ -18,7 +20,41 @@ const ModalDetailsPage = ({
 }) => {
   const isOutOfStock = item?.isOutOfStock === true || Number(item?.stock) <= 0;
   const isAvailable = item?.isAvailable !== false && !isOutOfStock;
-  const availabilityLabel = isOutOfStock ? "Stock out" : "Unavailable";
+  const availabilityLabel = isOutOfStock
+    ? "Stock out"
+    : item?.unavailableReason || "Unavailable";
+  const availableAddOns = (item?.addOns || []).filter(
+    (addOn) => addOn.isAvailable !== false,
+  );
+  const comboItems = item?.isComboMeal
+    ? (item?.comboItems || []).filter(
+        (comboItem) => comboItem.product || comboItem.productName || comboItem.label,
+      )
+    : [];
+  const selectedAddOnIds = new Set(
+    selectedAddOns.map((addOn) => String(addOn._id || addOn.name)),
+  );
+  const optionPrice =
+    selectedOption?.discountPrice ||
+    selectedOption?.actualPrice ||
+    item?.actualprice ||
+    0;
+  const addOnTotal = selectedAddOns.reduce(
+    (sum, addOn) => sum + Number(addOn.price || 0),
+    0,
+  );
+  const unitTotal = Number(optionPrice || 0) + addOnTotal;
+  const toggleAddOn = (addOn) => {
+    if (!setSelectedAddOns) return;
+    const key = String(addOn._id || addOn.name);
+    setSelectedAddOns(
+      selectedAddOnIds.has(key)
+        ? selectedAddOns.filter(
+            (entry) => String(entry._id || entry.name) !== key,
+          )
+        : [...selectedAddOns, addOn],
+    );
+  };
 
   return (
     <div
@@ -82,9 +118,7 @@ const ModalDetailsPage = ({
               <div className="flex items-center gap-3">
                 <h2 className="text-2xl font-extrabold text-gray-900 md:text-3xl">
                   Rs.{" "}
-                  {selectedOption?.discountPrice ||
-                    selectedOption?.actualPrice ||
-                    item?.actualprice}
+                  {unitTotal}
                 </h2>
 
                 {selectedOption?.actualPrice &&
@@ -160,6 +194,89 @@ const ModalDetailsPage = ({
                 ))}
               </div>
 
+              {comboItems.length > 0 && (
+                <div className="mt-8">
+                  <h3 className="mb-2 text-xs font-bold tracking-wide text-gray-500 uppercase">
+                    Combo Includes
+                  </h3>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {comboItems.map((comboItem, index) => {
+                      const comboProduct = comboItem.product || {};
+                      const name =
+                        comboProduct.name ||
+                        comboItem.productName ||
+                        comboItem.label ||
+                        "Combo item";
+                      const optionName = comboItem.optionName
+                        ? ` - ${comboItem.optionName}`
+                        : "";
+                      return (
+                        <div
+                          key={`${comboProduct._id || comboItem.product || name}-${index}`}
+                          className="flex items-center justify-between gap-3 rounded-2xl border border-red-100 bg-red-50 p-3"
+                        >
+                          <span className="min-w-0">
+                            <b className="block truncate text-sm text-gray-900">
+                              {name}
+                              {optionName}
+                            </b>
+                            <small className="mt-1 block text-xs font-bold text-red-700">
+                              Qty x{comboItem.quantity || 1}
+                            </small>
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {availableAddOns.length > 0 && (
+                <div className="mt-8">
+                  <h3 className="mb-2 text-xs font-bold tracking-wide text-gray-500 uppercase">
+                    Add-ons
+                  </h3>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {availableAddOns.map((addOn) => {
+                      const key = String(addOn._id || addOn.name);
+                      const active = selectedAddOnIds.has(key);
+                      return (
+                        <button
+                          type="button"
+                          key={key}
+                          onClick={() => toggleAddOn(addOn)}
+                          className={`flex items-center justify-between gap-3 rounded-2xl border p-3 text-left transition ${
+                            active
+                              ? "border-red-600 bg-red-50 shadow-md"
+                              : "border-gray-200 hover:border-red-300"
+                          }`}
+                        >
+                          <span className="min-w-0">
+                            <b className="block truncate text-sm text-gray-900">
+                              {addOn.name}
+                            </b>
+                            <small className="mt-1 block text-xs font-bold text-red-700">
+                              + Rs. {addOn.price}
+                            </small>
+                          </span>
+                          <span
+                            className={`grid h-5 w-5 place-items-center rounded-full border-2 ${
+                              active
+                                ? "border-red-600 bg-red-600"
+                                : "border-gray-300"
+                            }`}
+                          >
+                            {active && (
+                              <span className="h-2 w-2 rounded-full bg-white" />
+                            )}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <div className="mt-8">
                 <h3 className="mb-2 font-sans text-[16px] font-bold text-gray-600">
                   Special Instructions
@@ -208,10 +325,7 @@ const ModalDetailsPage = ({
 
               <button disabled={!isAvailable} onClick={() => isAvailable && onAddToCart?.()} className="flex items-center justify-center gap-2 px-3 py-3 text-sm font-bold text-white transition-all duration-300 bg-red-700 rounded-lg shadow-lg group md:px-10 hover:bg-red-600 whitespace-nowrap w-fit disabled:cursor-not-allowed disabled:bg-gray-400 disabled:hover:bg-gray-400 disabled:shadow-none">
                 <span>
-                  Rs.{" "}
-                  {(selectedOption?.discountPrice ||
-                    selectedOption?.actualPrice ||
-                    item?.actualprice) * quantity}
+                  Rs. {unitTotal * quantity}
                 </span>
 
                 <span className="opacity-50">|</span>

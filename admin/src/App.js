@@ -10,6 +10,7 @@ import CategoriesPage from "./features/categories/CategoriesPage";
 import CategoryEditor from "./features/categories/CategoryEditor";
 import CouponEditor from "./features/coupons/CouponEditor";
 import CouponsPage from "./features/coupons/CouponsPage";
+import CustomersPage from "./features/customers/CustomersPage";
 import OfferEditor from "./features/offers/OfferEditor";
 import OffersPage from "./features/offers/OffersPage";
 import OverviewPage from "./features/dashboard/OverviewPage";
@@ -27,7 +28,11 @@ import { productCategoryId, shortId } from "./utils/format";
 import { clearAdminSession, readAdminSession } from "./utils/session";
 
 const newOptionId = () => `${Date.now()}-${Math.random()}`;
+const newAddOnId = () => `${Date.now()}-${Math.random()}-addon`;
+const newComboItemId = () => `${Date.now()}-${Math.random()}-combo`;
 const unreadOrderStorageKey = (userId) => `harmain_admin_unread_orders_${userId}`;
+const hasPriceValue = (value) =>
+  value !== "" && value !== null && value !== undefined && Number.isFinite(Number(value)) && Number(value) >= 0;
 
 const toProductEditor = (product) => ({
   id: product._id,
@@ -37,6 +42,25 @@ const toProductEditor = (product) => ({
     category: productCategoryId(product),
     stock: String(product.stock ?? 0),
     tags: (product.tags || []).join(", "),
+    displayOrder: String(product.displayOrder ?? 0),
+    availabilitySchedule: {
+      ...emptyProduct().availabilitySchedule,
+      ...(product.availabilitySchedule || {}),
+      days: product.availabilitySchedule?.days || [],
+    },
+    addOns: (product.addOns || []).map((addOn, index) => ({
+      ...addOn,
+      clientId: addOn._id || `addon-${index}-${newAddOnId()}`,
+      price: String(addOn.price ?? ""),
+      isAvailable: addOn.isAvailable !== false,
+    })),
+    comboItems: (product.comboItems || []).map((item, index) => ({
+      clientId: item._id || `combo-${index}-${newComboItemId()}`,
+      product: item.product?._id || item.product || "",
+      quantity: String(item.quantity ?? 1),
+      label: item.label || item.product?.name || item.productName || "",
+      optionName: item.optionName || "",
+    })),
     options: (product.options || []).map((option, index) => ({
       ...option,
       clientId: option._id || `option-${index}-${newOptionId()}`,
@@ -47,16 +71,45 @@ const toProductEditor = (product) => ({
   },
 });
 
-const createProductPayload = (values) => {
+const createProductPayload = (values, products = []) => {
   const options = values.options
-    .filter((option) => option.name.trim() && option.actualPrice !== "")
-    .map((option) => ({
-      name: option.name.trim(),
-      actualPrice: Number(option.actualPrice),
-      ...(option.discountPrice !== "" ? { discountPrice: Number(option.discountPrice) } : {}),
-      tag: option.tag.trim(),
-    }));
+    .map((option) => {
+      const hasActualPrice = hasPriceValue(option.actualPrice);
+      const hasDiscountPrice = hasPriceValue(option.discountPrice);
+      const actualPrice = hasActualPrice
+        ? Number(option.actualPrice)
+        : Number(option.discountPrice);
+      return {
+        name: option.name.trim() || "Regular",
+        actualPrice,
+        ...(hasDiscountPrice ? { discountPrice: Number(option.discountPrice) } : {}),
+        tag: option.tag.trim(),
+      };
+    })
+    .filter((option) => option.name && Number(option.actualPrice) > 0);
   const firstOption = options[0];
+  const addOns = values.addOns
+    .filter((addOn) => addOn.name.trim() && addOn.price !== "")
+    .map((addOn) => ({
+      name: addOn.name.trim(),
+      price: Number(addOn.price),
+      isAvailable: addOn.isAvailable !== false,
+    }));
+  const comboItems = values.isComboMeal
+    ? (values.comboItems || [])
+        .filter((item) => item.product)
+        .map((item) => {
+          const comboProduct = products.find(
+            (product) => product._id === item.product,
+          );
+          return {
+            product: item.product,
+            quantity: Math.max(1, Number(item.quantity || 1)),
+            label: item.label || "",
+            optionName: item.optionName || comboProduct?.options?.[0]?.name || "",
+          };
+        })
+    : [];
   return {
     name: values.name.trim(),
     description: values.description.trim(),
@@ -66,6 +119,19 @@ const createProductPayload = (values) => {
     stock: Number(values.stock || 0),
     tags: values.tags.split(",").map((tag) => tag.trim()).filter(Boolean),
     isAvailable: values.isAvailable,
+    isFeatured: values.isFeatured,
+    isPopular: values.isPopular,
+    isComboMeal: values.isComboMeal,
+    comboItems,
+    displayOrder: Number(values.displayOrder || 0),
+    availabilitySchedule: {
+      isEnabled: values.availabilitySchedule?.isEnabled === true,
+      days: values.availabilitySchedule?.days || [],
+      startTime: values.availabilitySchedule?.startTime || "",
+      endTime: values.availabilitySchedule?.endTime || "",
+      message: values.availabilitySchedule?.message?.trim() || "",
+    },
+    addOns,
     options,
   };
 };
@@ -185,6 +251,14 @@ function App() {
   const [couponsLoading, setCouponsLoading] = useState(false);
   const [offers, setOffers] = useState([]);
   const [offersLoading, setOffersLoading] = useState(false);
+  const [customers, setCustomers] = useState([]);
+  const [customersTotal, setCustomersTotal] = useState(0);
+  const [customersLoading, setCustomersLoading] = useState(false);
+  const [customersError, setCustomersError] = useState("");
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [customerStatus, setCustomerStatus] = useState("all");
+  const [customerDetail, setCustomerDetail] = useState(null);
+  const [customerDetailLoading, setCustomerDetailLoading] = useState(false);
   const [deliverySettings, setDeliverySettings] = useState(null);
   const [deliverySettingsLoading, setDeliverySettingsLoading] = useState(false);
   const orderRequestRef = useRef(0);
@@ -205,6 +279,12 @@ function App() {
     setUnreadOrdersOwner(null);
     setCoupons([]);
     setOffers([]);
+    setCustomers([]);
+    setCustomersTotal(0);
+    setCustomersError("");
+    setCustomerSearch("");
+    setCustomerStatus("all");
+    setCustomerDetail(null);
     setDeliverySettings(null);
   }, []);
 
@@ -246,6 +326,31 @@ function App() {
   useEffect(() => {
     loadOffers();
   }, [loadOffers]);
+
+  const loadCustomers = useCallback(async () => {
+    if (!session?.token) return;
+    setCustomersLoading(true);
+    setCustomersError("");
+    try {
+      const result = await adminApi.getCustomers(session.token, {
+        search: customerSearch,
+        status: customerStatus,
+      });
+      setCustomers(result.customers || []);
+      setCustomersTotal(result.pagination?.total || 0);
+    } catch (requestError) {
+      if (requestError.status === 401 || requestError.status === 403) logout();
+      else setCustomersError(requestError.message || "Could not load customers.");
+    } finally {
+      setCustomersLoading(false);
+    }
+  }, [customerSearch, customerStatus, logout, session?.token]);
+
+  useEffect(() => {
+    if (view !== "customers") return undefined;
+    const timer = window.setTimeout(loadCustomers, 250);
+    return () => window.clearTimeout(timer);
+  }, [loadCustomers, view]);
 
   const loadDeliverySettings = useCallback(async () => {
     if (!session?.token) return;
@@ -390,6 +495,22 @@ function App() {
   }, [loadOffers, offerEditor, view]);
 
   useEffect(() => {
+    if (view !== "customers" || customerDetail) return undefined;
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") loadCustomers();
+    };
+
+    const interval = window.setInterval(refreshWhenVisible, 60000);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [customerDetail, loadCustomers, view]);
+
+  useEffect(() => {
     if (view === "orders") loadFilteredOrders(orderFilter);
   }, [loadFilteredOrders, orderFilter, view]);
 
@@ -417,9 +538,13 @@ function App() {
   const saveProduct = async (event) => {
     event.preventDefault();
     const editor = productEditor;
-    const payload = createProductPayload(editor.values);
+    const payload = createProductPayload(editor.values, products);
     if (!editor.id && (!payload.options.length || payload.price <= 0)) {
       notify("Add at least one size option with a valid price.", "error");
+      return;
+    }
+    if (payload.isComboMeal && !payload.comboItems.length) {
+      notify("Select at least one product inside this combo meal.", "error");
       return;
     }
     setBusyAction("product-save");
@@ -449,6 +574,51 @@ function App() {
       await load();
     } catch (requestError) {
       notify(requestError.message || "Product could not be saved.", "error");
+    } finally {
+      setBusyAction("");
+    }
+  };
+
+  const exportProducts = async () => {
+    setBusyAction("product-export");
+    try {
+      const exportedProducts = await adminApi.exportProducts(session.token);
+      const blob = new Blob([JSON.stringify(exportedProducts, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `harmain-products-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      notify("Product export downloaded.");
+    } catch (requestError) {
+      notify(requestError.message || "Products could not be exported.", "error");
+    } finally {
+      setBusyAction("");
+    }
+  };
+
+  const importProducts = async (file) => {
+    if (!file) return;
+    setBusyAction("product-import");
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      const productsToImport = Array.isArray(parsed) ? parsed : parsed.products;
+      if (!Array.isArray(productsToImport))
+        throw new Error("Import file must contain a products array.");
+      const result = await adminApi.importProducts(productsToImport, session.token);
+      notify(
+        `Import finished: ${result.created} created, ${result.updated} updated${result.failed ? `, ${result.failed} failed` : ""}.`,
+        result.failed ? "warning" : "success",
+      );
+      await load();
+    } catch (requestError) {
+      notify(requestError.message || "Products could not be imported.", "error");
     } finally {
       setBusyAction("");
     }
@@ -622,6 +792,125 @@ function App() {
     }
   };
 
+  const applyCustomerUpdate = (customer) => {
+    if (!customer?._id) return;
+    setCustomers((current) =>
+      current.map((entry) => entry._id === customer._id ? { ...entry, ...customer } : entry),
+    );
+    setCustomerDetail((current) =>
+      current?.customer?._id === customer._id
+        ? { ...current, customer: { ...current.customer, ...customer } }
+        : current,
+    );
+  };
+
+  const openCustomer = async (customerId) => {
+    setCustomerDetail({
+      customer: customers.find((customer) => customer._id === customerId) || null,
+      orders: [],
+    });
+    setCustomerDetailLoading(true);
+    try {
+      setCustomerDetail(await adminApi.getCustomer(customerId, session.token));
+    } catch (requestError) {
+      notify(requestError.message || "Customer profile could not be loaded.", "error");
+      setCustomerDetail(null);
+    } finally {
+      setCustomerDetailLoading(false);
+    }
+  };
+
+  const saveCustomerLoyalty = async (customerId, payload) => {
+    setBusyAction(`customer-loyalty-${customerId}`);
+    try {
+      const result = await adminApi.updateCustomerLoyalty(customerId, payload, session.token);
+      applyCustomerUpdate(result.customer);
+      notify("Loyalty discount updated.");
+      return true;
+    } catch (requestError) {
+      notify(requestError.message || "Loyalty discount could not be saved.", "error");
+      return false;
+    } finally {
+      setBusyAction("");
+    }
+  };
+
+  const addCustomerNote = async (customerId, text) => {
+    if (!text.trim()) {
+      notify("Write a note first.", "error");
+      return false;
+    }
+    setBusyAction(`customer-note-${customerId}`);
+    try {
+      const result = await adminApi.addCustomerNote(customerId, text.trim(), session.token);
+      setCustomerDetail((current) =>
+        current?.customer?._id === customerId
+          ? {
+              ...current,
+              customer: {
+                ...current.customer,
+                customerNotes: result.notes || [],
+              },
+            }
+          : current,
+      );
+      setCustomers((current) =>
+        current.map((customer) =>
+          customer._id === customerId
+            ? { ...customer, customerNotes: result.notes || [] }
+            : customer,
+        ),
+      );
+      notify("Customer note added.");
+      return true;
+    } catch (requestError) {
+      notify(requestError.message || "Customer note could not be added.", "error");
+      return false;
+    } finally {
+      setBusyAction("");
+    }
+  };
+
+  const deleteCustomerNote = async (customerId, noteId) => {
+    setBusyAction(`customer-note-delete-${noteId}`);
+    try {
+      const result = await adminApi.deleteCustomerNote(customerId, noteId, session.token);
+      setCustomerDetail((current) =>
+        current?.customer?._id === customerId
+          ? {
+              ...current,
+              customer: {
+                ...current.customer,
+                customerNotes: result.notes || [],
+              },
+            }
+          : current,
+      );
+      notify("Customer note deleted.");
+      return true;
+    } catch (requestError) {
+      notify(requestError.message || "Customer note could not be deleted.", "error");
+      return false;
+    } finally {
+      setBusyAction("");
+    }
+  };
+
+  const toggleCustomerBlock = async (customerId, payload) => {
+    setBusyAction(`customer-status-${customerId}`);
+    try {
+      const result = await adminApi.updateCustomerStatus(customerId, payload, session.token);
+      applyCustomerUpdate(result.customer);
+      notify(result.customer?.isActive ? "Customer unblocked." : "Customer blocked.");
+      return true;
+    } catch (requestError) {
+      notify(requestError.message || "Customer status could not be updated.", "error");
+      return false;
+    } finally {
+      setBusyAction("");
+    }
+  };
+
   if (!session) return <LoginScreen onLogin={setSession} />;
 
   const requestDelete = (entity, record) => setConfirmation({
@@ -631,23 +920,24 @@ function App() {
     message: entity === "product" ? "This product will be permanently removed from the menu and cannot be recovered." : entity === "coupon" ? "This coupon will no longer be available at checkout. This action cannot be undone." : entity === "offer" ? "This automatic offer will no longer be available at checkout. This action cannot be undone." : "Delete this category only after its products have been reassigned. This action cannot be undone.",
   });
 
-  const viewLoading = view === "orders" ? ordersLoading : view === "coupons" ? couponsLoading : view === "offers" ? offersLoading : view === "delivery" ? deliverySettingsLoading : loading;
-  const refreshView = view === "orders" ? () => loadFilteredOrders(orderFilter) : view === "coupons" ? loadCoupons : view === "offers" ? loadOffers : view === "delivery" ? loadDeliverySettings : load;
+  const viewLoading = view === "orders" ? ordersLoading : view === "coupons" ? couponsLoading : view === "offers" ? offersLoading : view === "customers" ? customersLoading : view === "delivery" ? deliverySettingsLoading : loading;
+  const refreshView = view === "orders" ? () => loadFilteredOrders(orderFilter) : view === "coupons" ? loadCoupons : view === "offers" ? loadOffers : view === "customers" ? loadCustomers : view === "delivery" ? loadDeliverySettings : load;
 
   return (
     <>
       <AdminShell session={session} view={view} onViewChange={setView} onLogout={logout} loading={viewLoading} onRefresh={refreshView} newOrderCount={unreadOrderIds.size} realtimeConnected={realtimeConnected}>
         {error && <div className="mt-5 flex items-center justify-between gap-4 border-l-4 border-brand-600 bg-red-50 px-4 py-3 text-sm font-bold text-brand-700"><span>{error}</span><button className="text-xs font-extrabold underline" onClick={load}>Try again</button></div>}
         {view === "overview" && <OverviewPage metrics={metrics} orders={orders} products={products} unreadOrderIds={unreadOrderIds} onMarkOrderRead={markOrderRead} onNavigate={setView} onOpenOrder={setOrderDetails} />}
-        {view === "products" && <ProductsPage products={filteredProducts} categories={categories} query={productQuery} categoryFilter={categoryFilter} onQueryChange={setProductQuery} onCategoryFilterChange={setCategoryFilter} onNew={() => setProductEditor({ id: null, values: emptyProduct(categories[0]?._id || "") })} onEdit={(product) => setProductEditor(toProductEditor(product))} onDelete={(product) => requestDelete("product", product)} busyAction={busyAction} />}
+        {view === "products" && <ProductsPage products={filteredProducts} categories={categories} query={productQuery} categoryFilter={categoryFilter} onQueryChange={setProductQuery} onCategoryFilterChange={setCategoryFilter} onNew={() => setProductEditor({ id: null, values: { ...emptyProduct(categories[0]?._id || ""), options: [{ clientId: newOptionId(), name: "Regular", actualPrice: "", discountPrice: "", tag: "" }] } })} onEdit={(product) => setProductEditor(toProductEditor(product))} onDelete={(product) => requestDelete("product", product)} onExport={exportProducts} onImport={importProducts} busyAction={busyAction} />}
         {view === "categories" && <CategoriesPage categories={categories} products={products} onNew={() => setCategoryEditor({ id: null, values: emptyCategory })} onEdit={(category) => setCategoryEditor({ id: category._id, values: { ...emptyCategory, ...category } })} onDelete={(category) => requestDelete("category", category)} busyAction={busyAction} />}
         {view === "orders" && <OrdersPage orders={filteredOrders} total={filteredOrdersTotal} filter={orderFilter} unreadOrderIds={unreadOrderIds} onMarkOrderRead={markOrderRead} onFilterChange={setOrderFilter} onUpdate={updateOrder} onCancel={(order) => setCancelEditor({ order })} onOpenOrder={setOrderDetails} busyAction={busyAction} loading={ordersLoading} error={ordersError} />}
+        {view === "customers" && <CustomersPage customers={customers} total={customersTotal} search={customerSearch} status={customerStatus} loading={customersLoading} error={customersError} selectedDetail={customerDetail} detailLoading={customerDetailLoading} busyAction={busyAction} onSearchChange={setCustomerSearch} onStatusChange={setCustomerStatus} onOpenCustomer={openCustomer} onCloseCustomer={() => setCustomerDetail(null)} onSaveLoyalty={saveCustomerLoyalty} onAddNote={addCustomerNote} onDeleteNote={deleteCustomerNote} onToggleBlock={toggleCustomerBlock} />}
         {view === "coupons" && <CouponsPage coupons={coupons} onNew={() => setCouponEditor({ id: null, values: { ...emptyCoupon, startsAt: toDateTimeInput(new Date()) } })} onEdit={(coupon) => setCouponEditor(toCouponEditor(coupon))} onDelete={(coupon) => requestDelete("coupon", coupon)} busyAction={busyAction} />}
         {view === "offers" && <OffersPage offers={offers} onNew={() => setOfferEditor({ id: null, values: { ...emptyOffer, startsAt: toDateTimeInput(new Date()) } })} onEdit={(offer) => setOfferEditor(toOfferEditor(offer))} onDelete={(offer) => requestDelete("offer", offer)} busyAction={busyAction} />}
         {view === "delivery" && <DeliverySettingsPage settings={deliverySettings} loading={deliverySettingsLoading} onSave={saveDeliverySettings} busy={busyAction === "delivery-settings-save"} />}
         {view === "riders" && <RidersPage riders={riders} onNew={() => setRiderEditor({ id: null, values: emptyRider })} onEdit={(rider) => setRiderEditor({ id: rider._id, values: { ...emptyRider, ...rider, password: "" } })} />}
       </AdminShell>
-      {productEditor && <ProductEditor editor={productEditor} categories={categories} onChange={setProductEditor} onClose={() => setProductEditor(null)} onSave={saveProduct} busy={busyAction === "product-save"} />}
+      {productEditor && <ProductEditor editor={productEditor} categories={categories} products={products} onChange={setProductEditor} onClose={() => setProductEditor(null)} onSave={saveProduct} busy={busyAction === "product-save"} />}
       {categoryEditor && <CategoryEditor editor={categoryEditor} onChange={setCategoryEditor} onClose={() => setCategoryEditor(null)} onSave={saveCategory} busy={busyAction === "category-save"} />}
       {couponEditor && <CouponEditor editor={couponEditor} onChange={setCouponEditor} onClose={() => setCouponEditor(null)} onSave={saveCoupon} busy={busyAction === "coupon-save"} />}
       {offerEditor && <OfferEditor editor={offerEditor} categories={categories} products={products} onChange={setOfferEditor} onClose={() => setOfferEditor(null)} onSave={saveOffer} busy={busyAction === "offer-save"} />}

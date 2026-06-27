@@ -29,6 +29,20 @@ export const adminApi = {
   getRiders: (token) => request("/auth/admin/riders", { token }),
   getCoupons: (token) => request("/coupons", { token }),
   getOffers: (token) => request("/offers", { token }),
+  getCustomers: (token, { search = "", status = "all" } = {}) =>
+    request(
+      `/customers?limit=100&search=${encodeURIComponent(search)}&status=${encodeURIComponent(status)}`,
+      { token },
+    ),
+  getCustomer: (id, token) => request(`/customers/${id}`, { token }),
+  updateCustomerStatus: (id, body, token) =>
+    request(`/customers/${id}/status`, { method: "PATCH", body, token }),
+  updateCustomerLoyalty: (id, body, token) =>
+    request(`/customers/${id}/loyalty`, { method: "PATCH", body, token }),
+  addCustomerNote: (id, text, token) =>
+    request(`/customers/${id}/notes`, { method: "POST", body: { text }, token }),
+  deleteCustomerNote: (id, noteId, token) =>
+    request(`/customers/${id}/notes/${noteId}`, { method: "DELETE", token }),
   getDeliverySettings: (token) => request("/settings/delivery", { token }),
   saveDeliverySettings: (body, token) =>
     request("/settings/delivery", { method: "PATCH", body, token }),
@@ -42,6 +56,9 @@ export const adminApi = {
     }),
   deleteProduct: (id, token) =>
     request(`/products/${id}`, { method: "DELETE", token }),
+  exportProducts: (token) => request("/products/admin/export", { token }),
+  importProducts: (products, token) =>
+    request("/products/admin/import", { method: "POST", body: { products }, token }),
   saveCoupon: (id, body, token) =>
     request(id ? `/coupons/${id}` : "/coupons", {
       method: id ? "PATCH" : "POST",

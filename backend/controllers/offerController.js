@@ -207,6 +207,7 @@ export const quoteBestDiscount = asyncHandler(async (req, res) => {
     automaticOffer: automaticOfferSummary(selection.automaticOffer),
     itemOffer: automaticOfferSummary(selection.itemOffer),
     extraAutomaticOffer: automaticOfferSummary(selection.extraAutomaticOffer),
+    loyaltyOffer: automaticOfferSummary(selection.loyaltyOffer),
     coupon: selection.couponResult ? { code: selection.couponResult.coupon.code, discount: selection.couponResult.discount } : null,
     applied: selection.applied ? {
       type: selection.applied.type,
@@ -216,6 +217,7 @@ export const quoteBestDiscount = asyncHandler(async (req, res) => {
       extraDiscount: selection.applied.extraDiscount || 0,
       couponDiscount: selection.applied.couponDiscount || 0,
       offerDiscount: selection.applied.offerDiscount || 0,
+      loyaltyDiscount: selection.applied.loyaltyDiscount || 0,
       kind: selection.applied.kind || null,
       details: selection.applied.details || [],
     } : null,

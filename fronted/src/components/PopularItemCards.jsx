@@ -8,15 +8,19 @@ const PopularItemCards = ({ item }) => {
   const [modalAnimation, setModalAnimation] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [selectedOption, setSelectedOption] = useState(item?.options?.[0]);
+  const [selectedAddOns, setSelectedAddOns] = useState([]);
   const [specialInstructions, setSpecialInstructions] = useState("");
   const [toast, setToast] = useState(false);
   const isOutOfStock = item?.isOutOfStock === true || Number(item?.stock) <= 0;
   const isAvailable = item?.isAvailable !== false && !isOutOfStock;
-  const availabilityLabel = isOutOfStock ? "Stock out" : "Unavailable";
+  const availabilityLabel = isOutOfStock
+    ? "Stock out"
+    : item?.unavailableReason || "Unavailable";
 
   const handleOpenModal = () => {
     setQuantity(1);
     setSelectedOption(item?.options?.[0]);
+    setSelectedAddOns([]);
     setSpecialInstructions("");
     setModelVisible(true);
     setTimeout(() => setModalAnimation(true), 10);
@@ -37,6 +41,7 @@ const PopularItemCards = ({ item }) => {
         quantity,
         optionName: selectedOption?.name || "",
         specialInstructions,
+        addOns: selectedAddOns.map((addOn) => addOn._id || addOn.name),
       });
       window.dispatchEvent(new Event("harmain-cart-updated"));
       handleCloseModal();
@@ -123,6 +128,8 @@ const PopularItemCards = ({ item }) => {
           handleCloseModal={handleCloseModal}
           selectedOption={selectedOption}
           setSelectedOption={setSelectedOption}
+          selectedAddOns={selectedAddOns}
+          setSelectedAddOns={setSelectedAddOns}
           onAddToCart={addToCart}
         />
       )}

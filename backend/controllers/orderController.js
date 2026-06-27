@@ -7,7 +7,8 @@ import User from "../models/User.js";
 import asyncHandler from "../utils/asyncHandler.js";
 import { claimCouponUsage } from "../utils/couponService.js";
 import { calculateDeliveryCharge } from "../utils/deliverySettingsService.js";
-import { couponSnapshot, offerBreakdownSnapshot, offerSnapshot, selectBestDiscount } from "../utils/offerService.js";
+import { couponSnapshot, loyaltySnapshot, offerBreakdownSnapshot, offerSnapshot, selectBestDiscount } from "../utils/offerService.js";
+import { productAvailability } from "../utils/productAvailability.js";
 import { emitStockAlert } from "../utils/stockAlerts.js";
 
 const statuses = [
@@ -35,17 +36,49 @@ const refundStatuses = [
 ];
 const MINIMUM_ORDER_AMOUNT = 500;
 const BUSINESS_TIME_ZONE = process.env.BUSINESS_TIME_ZONE || "Asia/Karachi";
-const cartLineKey = ({ product, optionName = "", specialInstructions = "" }) =>
+const cartLineKey = ({ product, optionName = "", specialInstructions = "", addOnsKey = "" }) =>
   [
     (product?._id || product || "").toString(),
     optionName || "",
     specialInstructions || "",
+    addOnsKey || "",
   ].join("::");
 const orderFilterStatuses = {
   pending: ["placed", "confirmed"],
   preparing: ["preparing", "out_for_delivery"],
   delivered: ["delivered"],
   cancelled: ["cancelled"],
+};
+
+const cleanString = (value) => (typeof value === "string" ? value.trim() : "");
+const checkoutAddressPayload = (address = {}) => ({
+  label: (cleanString(address.label) || cleanString(address.area) || "Home").slice(0, 40),
+  fullName: cleanString(address.fullName),
+  phone: cleanString(address.phone),
+  line1: cleanString(address.line1),
+  line2: cleanString(address.line2),
+  city: cleanString(address.city),
+  area: cleanString(address.area),
+  instructions: cleanString(address.instructions).slice(0, 300),
+});
+const sameAddress = (left = {}, right = {}) =>
+  cleanString(left.phone) === cleanString(right.phone) &&
+  cleanString(left.line1).toLowerCase() === cleanString(right.line1).toLowerCase() &&
+  cleanString(left.city).toLowerCase() === cleanString(right.city).toLowerCase() &&
+  cleanString(left.area).toLowerCase() === cleanString(right.area).toLowerCase();
+const saveCheckoutAddress = async ({ user, address, addressId }) => {
+  const addresses = user.savedAddresses || [];
+  const payload = checkoutAddressPayload(address);
+  let target = addressId ? addresses.id(addressId) : null;
+  if (!target) target = addresses.find((entry) => sameAddress(entry, payload));
+  if (target) {
+    const label = target.label || payload.label;
+    const isDefault = target.isDefault;
+    Object.assign(target, payload, { label, isDefault });
+  } else {
+    addresses.push({ ...payload, isDefault: addresses.length === 0 });
+  }
+  await user.save();
 };
 
 const datePartsInTimeZone = (date, timeZone) =>
@@ -126,22 +159,50 @@ const emitOrderEvent = (req, event, order) =>
     .get("io")
     ?.to("admin-orders")
     .emit(event, { order: order.toObject() });
+const comboItemSnapshots = (product) =>
+  product?.isComboMeal
+    ? (product.comboItems || [])
+        .map((comboItem) => {
+          const fallbackOptionName = comboItem.product?.options?.[0]?.name || "";
+          return {
+            product: comboItem.product?._id || comboItem.product || null,
+            name:
+              comboItem.product?.name ||
+              comboItem.label ||
+              "Combo item",
+            optionName: comboItem.optionName || fallbackOptionName,
+            quantity: Math.max(1, Number(comboItem.quantity || 1)),
+          };
+        })
+        .filter((comboItem) => comboItem.name)
+    : [];
 
 export const checkout = asyncHandler(async (req, res) => {
-  const { deliveryAddress, paymentMethod = "cash_on_delivery", couponCode = "" } = req.body;
+  const {
+    deliveryAddress,
+    paymentMethod = "cash_on_delivery",
+    couponCode = "",
+    saveAddress = false,
+    addressId = "",
+  } = req.body;
+  const addressForOrder = checkoutAddressPayload(deliveryAddress);
   if (
-    !deliveryAddress?.fullName ||
-    !deliveryAddress?.phone ||
-    !deliveryAddress?.line1 ||
-    !deliveryAddress?.city
+    !addressForOrder.fullName ||
+    !addressForOrder.phone ||
+    !addressForOrder.line1 ||
+    !addressForOrder.city
   )
     return res
       .status(400)
       .json({ message: "Complete delivery address is required" });
 
-  const cart = await Cart.findOne({ user: req.user._id }).populate(
-    "items.product",
-  );
+  const cart = await Cart.findOne({ user: req.user._id }).populate({
+    path: "items.product",
+    populate: {
+      path: "comboItems.product",
+      select: "name options",
+    },
+  });
   if (!cart?.items.length)
     return res.status(400).json({ message: "Your cart is empty" });
 
@@ -157,9 +218,10 @@ export const checkout = asyncHandler(async (req, res) => {
     requestedByProduct.set(productId, current);
   });
   const hasUnavailableItem =
-    cart.items.some(
-      ({ product }) => !product || !product.isAvailable || product.stock <= 0,
-    ) ||
+    cart.items.some(({ product }) => {
+      if (!product || !product.isAvailable || product.stock <= 0) return true;
+      return !productAvailability(product).isOrderable;
+    }) ||
     [...requestedByProduct.values()].some(
       ({ product, quantity }) => quantity > product.stock,
     );
@@ -169,11 +231,22 @@ export const checkout = asyncHandler(async (req, res) => {
       .json({ message: "One or more items are unavailable or out of stock" });
 
   const baseItems = cart.items.map(
-    ({ product, quantity, optionName, specialInstructions, unitPrice }) => ({
+    ({
+      product,
+      quantity,
+      optionName,
+      specialInstructions,
+      addOns = [],
+      addOnsKey = "",
+      unitPrice,
+    }) => ({
       product: product._id,
       name: product.name,
       optionName,
       specialInstructions,
+      addOns,
+      addOnsKey,
+      comboItems: comboItemSnapshots(product),
       image: product.image,
       price: unitPrice ?? product.price,
       quantity,
@@ -192,6 +265,8 @@ export const checkout = asyncHandler(async (req, res) => {
   const discount = discountSelection.applied?.discount || 0;
   const couponDiscount = discountSelection.applied?.couponDiscount || 0;
   const offerDiscount = discountSelection.applied?.offerDiscount || 0;
+  const customerLoyaltyDiscount =
+    discountSelection.applied?.loyaltyDiscount || 0;
   const subtotal = discountSelection.subtotal ?? paidSubtotal;
   const freeQuantityByLine = new Map(
     (discountSelection.applied?.details || [])
@@ -234,14 +309,21 @@ export const checkout = asyncHandler(async (req, res) => {
     order = await Order.create({
       user: req.user._id,
       items,
-      deliveryAddress,
+      deliveryAddress: addressForOrder,
       paymentMethod,
       subtotal,
       coupon: discountSelection.applied?.type === "coupon"
         ? couponSnapshot(discountSelection.applied.coupon, couponDiscount)
         : undefined,
-      offer: discountSelection.applied?.type === "offer"
+      offer: discountSelection.applied?.type === "offer" &&
+        discountSelection.applied?.kind !== "loyalty"
         ? offerSnapshot(discountSelection.applied.offer, offerDiscount || discount)
+        : undefined,
+      loyaltyDiscount: discountSelection.applied?.loyalty
+        ? loyaltySnapshot(
+            discountSelection.applied.loyalty,
+            customerLoyaltyDiscount,
+          )
         : undefined,
       offerBreakdown: discountSelection.applied
         ? offerBreakdownSnapshot(discountSelection.applied.details)
@@ -270,6 +352,13 @@ export const checkout = asyncHandler(async (req, res) => {
   );
   cart.items = [];
   await cart.save();
+  if (saveAddress) {
+    await saveCheckoutAddress({
+      user: req.user,
+      address: addressForOrder,
+      addressId,
+    });
+  }
   await order.populate("user", "name email");
   emitOrderEvent(req, "order:created", order);
   updatedProducts.forEach((product, index) =>

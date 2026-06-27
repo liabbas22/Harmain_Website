@@ -23,7 +23,17 @@ const productCard = (product) => {
     image: product.image || AssetsData.ChickenCheeseOmellete,
     stock,
     isOutOfStock,
-    isAvailable: product.isAvailable !== false && !isOutOfStock,
+    isAvailable:
+      product.isAvailable !== false &&
+      product.isOrderable !== false &&
+      !isOutOfStock,
+    unavailableReason: product.unavailableReason || "",
+    isFeatured: product.isFeatured === true,
+    isPopular: product.isPopular === true,
+    isComboMeal: product.isComboMeal === true,
+    comboItems: product.comboItems || [],
+    displayOrder: product.displayOrder || 0,
+    addOns: product.addOns || [],
     activeOffer: product.activeOffer || null,
     options: product.options?.length ? product.options : [{ name: "Regular", actualPrice: product.price }],
   };
@@ -37,7 +47,13 @@ const Home = () => {
   useEffect(() => { loadMenu(); }, [loadMenu]);
   const categoryUi = useMemo(() => categories.map((category) => ({ id: category._id, title: category.name, icon: iconFor(category.name), name: category.name, image: category.image || AssetsData.CategoryImage, items: products.filter((product) => (product.category?._id || product.category) === category._id).map(productCard) })), [categories, products]);
   const menuItems = useMemo(() => products.map(productCard), [products]);
-  const popular = useMemo(() => menuItems.slice(0, 4), [menuItems]);
+  const popular = useMemo(() => {
+    const chosen = menuItems
+      .filter((item) => item.isPopular || item.isFeatured)
+      .sort((left, right) => left.displayOrder - right.displayOrder)
+      .slice(0, 4);
+    return chosen.length ? chosen : menuItems.slice(0, 4);
+  }, [menuItems]);
   return <div className="bg-red-50"><Herosection />{loading ? <div className="mx-4 py-8 md:mx-8 lg:mx-24"><Skeleton /></div> : error ? <div className="mx-4 py-8 md:mx-8 lg:mx-24"><State error={error} retry={loadMenu} /></div> : !categoryUi.length ? <div className="mx-4 py-8 md:mx-8 lg:mx-24"><State /></div> : <><Category categories={categoryUi} /><div className="flex flex-col gap-4 py-2 mx-4 my-auto md:mx-8 lg:mx-24"><Search items={menuItems} /><PopularItem items={popular} /><CategoryData categories={categoryUi} /></div></>}</div>;
 };
 export default Home;

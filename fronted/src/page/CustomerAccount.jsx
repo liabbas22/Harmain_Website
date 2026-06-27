@@ -3,13 +3,17 @@ import { Link, Navigate, useLocation } from "react-router-dom";
 import {
   FiCheckCircle,
   FiClock,
+  FiEdit3,
+  FiHome,
   FiMail,
   FiMapPin,
   FiPackage,
   FiPhone,
+  FiPlus,
   FiRefreshCw,
   FiSave,
   FiShoppingBag,
+  FiTrash2,
   FiUser,
   FiX,
 } from "react-icons/fi";
@@ -70,6 +74,17 @@ const totalOrderItems = (order) =>
       sum + Number(item.quantity || 0) + Number(item.freeQuantity || 0),
     0,
   );
+const emptyAddress = {
+  label: "Home",
+  fullName: "",
+  phone: "",
+  line1: "",
+  line2: "",
+  city: "Karachi",
+  area: "",
+  instructions: "",
+  isDefault: false,
+};
 
 const StatusBadge = ({ value }) => (
   <span
@@ -244,6 +259,14 @@ function OrderDetailsModal({ order, onClose }) {
                         Note: {item.specialInstructions}
                       </span>
                     )}
+                    {item.addOns?.length > 0 && (
+                      <span className="mt-1 block text-xs font-semibold text-gray-500">
+                        Add-ons:{" "}
+                        {item.addOns
+                          .map((addOn) => `${addOn.name} (+Rs. ${money(addOn.price)})`)
+                          .join(", ")}
+                      </span>
+                    )}
                   </div>
                   <b className="text-right text-sm text-gray-900">
                     Rs. {money(Number(item.price || 0) * totalQuantity)}
@@ -294,6 +317,12 @@ function OrderDetailsModal({ order, onClose }) {
                       - Rs. {money(detail.discount)}
                     </div>
                   ))}
+                  {order.loyaltyDiscount && (
+                    <div className="mt-2 rounded-lg bg-green-50 px-2 py-1 text-[11px] font-bold text-green-700">
+                      {order.loyaltyDiscount.label} - Rs.{" "}
+                      {money(order.loyaltyDiscount.discount)}
+                    </div>
+                  )}
                 </div>
               )}
               <div className="mt-3 flex justify-between text-gray-600">
@@ -324,10 +353,14 @@ export default function CustomerAccount() {
   );
   const [profile, setProfile] = useState(null);
   const [form, setForm] = useState({ name: "", phone: "" });
+  const [addressForm, setAddressForm] = useState(emptyAddress);
+  const [addressEditorId, setAddressEditorId] = useState("");
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [addressSaving, setAddressSaving] = useState(false);
+  const [deletingAddressId, setDeletingAddressId] = useState("");
   const [message, setMessage] = useState("");
   const [selectedOrder, setSelectedOrder] = useState(null);
 
@@ -350,6 +383,12 @@ export default function CustomerAccount() {
         name: nextProfile.name || "",
         phone: nextProfile.phone || "",
       });
+      setAddressForm({
+        ...emptyAddress,
+        fullName: nextProfile.name || "",
+        phone: nextProfile.phone || "",
+      });
+      setAddressEditorId("");
       setOrders(orderResult.data || []);
       localStorage.setItem("harmain_user", JSON.stringify(nextProfile));
       window.dispatchEvent(new Event("harmain-user-updated"));
@@ -406,6 +445,88 @@ export default function CustomerAccount() {
   };
 
   const latestOrder = orders[0] || null;
+  const savedAddresses = profile?.savedAddresses || [];
+  const updateLocalProfile = (nextProfile) => {
+    setProfile(nextProfile);
+    localStorage.setItem("harmain_user", JSON.stringify(nextProfile));
+    window.dispatchEvent(new Event("harmain-user-updated"));
+  };
+  const resetAddressForm = () => {
+    setAddressEditorId("");
+    setAddressForm({
+      ...emptyAddress,
+      fullName: profile?.name || form.name || "",
+      phone: profile?.phone || form.phone || "",
+    });
+  };
+  const editAddress = (address) => {
+    setAddressEditorId(address._id);
+    setAddressForm({
+      ...emptyAddress,
+      ...address,
+      isDefault: address.isDefault === true,
+    });
+  };
+  const saveAddress = async (event) => {
+    event.preventDefault();
+    setMessage("");
+    setError("");
+    if (addressForm.fullName.trim().length < 2) {
+      setError("Enter recipient name for the saved address.");
+      return;
+    }
+    if (!/^\+?\d[\d\s-]{8,}$/.test(addressForm.phone)) {
+      setError("Enter a valid phone number for the saved address.");
+      return;
+    }
+    if (addressForm.line1.trim().length < 6 || !addressForm.city.trim()) {
+      setError("Enter a complete saved address.");
+      return;
+    }
+    if (!addressForm.area.trim()) {
+      setError("Area is required for the saved address.");
+      return;
+    }
+    setAddressSaving(true);
+    try {
+      const body = {
+        ...addressForm,
+        label: addressForm.label.trim() || "Home",
+        fullName: addressForm.fullName.trim(),
+        phone: addressForm.phone.trim(),
+        line1: addressForm.line1.trim(),
+        line2: addressForm.line2.trim(),
+        city: addressForm.city.trim(),
+        area: addressForm.area.trim(),
+        instructions: addressForm.instructions.trim(),
+      };
+      const { data } = addressEditorId
+        ? await api.patch(`/auth/me/addresses/${addressEditorId}`, body)
+        : await api.post("/auth/me/addresses", body);
+      updateLocalProfile({ ...profile, savedAddresses: data.addresses || [] });
+      resetAddressForm();
+      setMessage(addressEditorId ? "Address updated." : "Address saved.");
+    } catch (requestError) {
+      setError(apiError(requestError));
+    } finally {
+      setAddressSaving(false);
+    }
+  };
+  const deleteAddress = async (addressId) => {
+    setDeletingAddressId(addressId);
+    setMessage("");
+    setError("");
+    try {
+      const { data } = await api.delete(`/auth/me/addresses/${addressId}`);
+      updateLocalProfile({ ...profile, savedAddresses: data.addresses || [] });
+      if (addressEditorId === addressId) resetAddressForm();
+      setMessage("Address removed.");
+    } catch (requestError) {
+      setError(apiError(requestError));
+    } finally {
+      setDeletingAddressId("");
+    }
+  };
 
   return (
     <main className="min-h-[calc(100vh-160px)] bg-red-50 px-4 py-10">
@@ -544,6 +665,229 @@ export default function CustomerAccount() {
                     {saving ? "Saving..." : "Save profile"}
                   </button>
                 </form>
+                <section className="mt-8 border-t border-red-100 pt-6">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h3 className="flex items-center gap-2 text-sm font-extrabold text-gray-900">
+                        <FiHome className="text-red-700" />
+                        Saved addresses
+                      </h3>
+                      <p className="mt-1 text-sm text-gray-500">
+                        Keep delivery details ready for your next order.
+                      </p>
+                    </div>
+                    {addressEditorId && (
+                      <button
+                        type="button"
+                        onClick={resetAddressForm}
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-red-200 px-3 text-xs font-extrabold text-red-700 hover:bg-red-50"
+                      >
+                        <FiPlus />
+                        New address
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="mt-5 grid gap-3">
+                    {savedAddresses.map((address) => (
+                      <article
+                        key={address._id}
+                        className="rounded-2xl border border-red-100 bg-red-50/50 p-4"
+                      >
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <b className="text-sm text-gray-900">
+                                {address.label || "Address"}
+                              </b>
+                              {address.isDefault && (
+                                <span className="rounded-full bg-red-700 px-2 py-0.5 text-[10px] font-extrabold text-white">
+                                  Default
+                                </span>
+                              )}
+                            </div>
+                            <p className="mt-2 text-sm leading-6 text-gray-600">
+                              {address.fullName} | {address.phone}
+                              <br />
+                              {address.line1}
+                              {address.line2 ? `, ${address.line2}` : ""}
+                              {address.area ? `, ${address.area}` : ""},{" "}
+                              {address.city}
+                            </p>
+                            {address.instructions && (
+                              <p className="mt-2 text-xs font-semibold text-amber-700">
+                                Note: {address.instructions}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => editAddress(address)}
+                              className="grid h-9 w-9 place-items-center rounded-full bg-white text-red-700 hover:bg-red-100"
+                              title="Edit address"
+                              aria-label="Edit address"
+                            >
+                              <FiEdit3 />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => deleteAddress(address._id)}
+                              disabled={deletingAddressId === address._id}
+                              className="grid h-9 w-9 place-items-center rounded-full bg-white text-red-700 hover:bg-red-100 disabled:opacity-60"
+                              title="Delete address"
+                              aria-label="Delete address"
+                            >
+                              {deletingAddressId === address._id ? (
+                                <FiRefreshCw className="animate-spin" />
+                              ) : (
+                                <FiTrash2 />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      </article>
+                    ))}
+                    {!savedAddresses.length && (
+                      <div className="rounded-2xl border border-dashed border-red-200 p-5 text-center">
+                        <p className="text-sm font-bold text-gray-700">
+                          No saved addresses yet
+                        </p>
+                        <p className="mt-1 text-xs text-gray-500">
+                          Add one now or save it from checkout.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  <form
+                    onSubmit={saveAddress}
+                    className="mt-5 grid gap-4 rounded-2xl border border-red-100 p-4 sm:grid-cols-2"
+                  >
+                    <div className="sm:col-span-2">
+                      <h4 className="text-sm font-extrabold text-gray-900">
+                        {addressEditorId ? "Edit address" : "Add new address"}
+                      </h4>
+                    </div>
+                    <input
+                      value={addressForm.label}
+                      onChange={(event) =>
+                        setAddressForm({
+                          ...addressForm,
+                          label: event.target.value,
+                        })
+                      }
+                      placeholder="Label e.g. Home, Office"
+                      className="h-12 rounded-xl border border-gray-200 px-3 text-sm outline-none focus:border-red-500 focus:ring-4 focus:ring-red-100"
+                    />
+                    <input
+                      value={addressForm.fullName}
+                      onChange={(event) =>
+                        setAddressForm({
+                          ...addressForm,
+                          fullName: event.target.value,
+                        })
+                      }
+                      placeholder="Recipient name"
+                      className="h-12 rounded-xl border border-gray-200 px-3 text-sm outline-none focus:border-red-500 focus:ring-4 focus:ring-red-100"
+                    />
+                    <input
+                      value={addressForm.phone}
+                      onChange={(event) =>
+                        setAddressForm({
+                          ...addressForm,
+                          phone: event.target.value,
+                        })
+                      }
+                      placeholder="Phone number"
+                      className="h-12 rounded-xl border border-gray-200 px-3 text-sm outline-none focus:border-red-500 focus:ring-4 focus:ring-red-100"
+                    />
+                    <input
+                      value={addressForm.area}
+                      onChange={(event) =>
+                        setAddressForm({
+                          ...addressForm,
+                          area: event.target.value,
+                        })
+                      }
+                      placeholder="Area"
+                      className="h-12 rounded-xl border border-gray-200 px-3 text-sm outline-none focus:border-red-500 focus:ring-4 focus:ring-red-100"
+                    />
+                    <input
+                      value={addressForm.line1}
+                      onChange={(event) =>
+                        setAddressForm({
+                          ...addressForm,
+                          line1: event.target.value,
+                        })
+                      }
+                      placeholder="House, street, building"
+                      className="h-12 rounded-xl border border-gray-200 px-3 text-sm outline-none focus:border-red-500 focus:ring-4 focus:ring-red-100 sm:col-span-2"
+                    />
+                    <input
+                      value={addressForm.line2}
+                      onChange={(event) =>
+                        setAddressForm({
+                          ...addressForm,
+                          line2: event.target.value,
+                        })
+                      }
+                      placeholder="Apartment / landmark"
+                      className="h-12 rounded-xl border border-gray-200 px-3 text-sm outline-none focus:border-red-500 focus:ring-4 focus:ring-red-100"
+                    />
+                    <input
+                      value={addressForm.city}
+                      onChange={(event) =>
+                        setAddressForm({
+                          ...addressForm,
+                          city: event.target.value,
+                        })
+                      }
+                      placeholder="City"
+                      className="h-12 rounded-xl border border-gray-200 px-3 text-sm outline-none focus:border-red-500 focus:ring-4 focus:ring-red-100"
+                    />
+                    <input
+                      value={addressForm.instructions}
+                      onChange={(event) =>
+                        setAddressForm({
+                          ...addressForm,
+                          instructions: event.target.value,
+                        })
+                      }
+                      placeholder="Delivery instructions"
+                      className="h-12 rounded-xl border border-gray-200 px-3 text-sm outline-none focus:border-red-500 focus:ring-4 focus:ring-red-100 sm:col-span-2"
+                    />
+                    <label className="flex items-center gap-2 text-sm font-bold text-gray-600 sm:col-span-2">
+                      <input
+                        type="checkbox"
+                        checked={addressForm.isDefault}
+                        onChange={(event) =>
+                          setAddressForm({
+                            ...addressForm,
+                            isDefault: event.target.checked,
+                          })
+                        }
+                        className="h-4 w-4 accent-red-700"
+                      />
+                      Set as default address
+                    </label>
+                    <button
+                      disabled={addressSaving}
+                      className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-red-700 px-5 text-sm font-extrabold text-white shadow-lg shadow-red-700/20 hover:bg-red-800 disabled:opacity-60 sm:col-span-2"
+                    >
+                      {addressSaving ? (
+                        <FiRefreshCw className="animate-spin" />
+                      ) : (
+                        <FiSave />
+                      )}
+                      {addressSaving
+                        ? "Saving..."
+                        : addressEditorId
+                          ? "Update address"
+                          : "Save address"}
+                    </button>
+                  </form>
+                </section>
               </section>
               <aside className="rounded-2xl bg-white p-5 shadow-sm">
                 <h3 className="flex items-center gap-2 text-sm font-extrabold text-gray-900">

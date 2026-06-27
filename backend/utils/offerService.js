@@ -1,5 +1,7 @@
 import Offer from "../models/Offer.js";
+import User from "../models/User.js";
 import { couponSnapshot, validateCoupon } from "./couponService.js";
+import { productAvailability } from "./productAvailability.js";
 
 const roundedMoney = (value) => Math.round(Number(value || 0) * 100) / 100;
 const productId = (product) => String(product?._id || product || "");
@@ -13,6 +15,7 @@ const lineKey = (item) =>
     productId(itemProduct(item)),
     item.optionName || "",
     item.specialInstructions || "",
+    item.addOnsKey || "",
   ].join("::");
 const toPlainObject = (entry) => entry?.toObject ? entry.toObject() : entry;
 const dealType = (offer) => offer.dealType || "discount";
@@ -37,6 +40,13 @@ export const offerSnapshot = (offer, discount) => ({
   buyQuantity: offer.buyQuantity || 1,
   getQuantity: offer.getQuantity || 1,
   comboPrice: offer.comboPrice || 0,
+  discount,
+});
+
+export const loyaltySnapshot = (loyalty, discount) => ({
+  label: loyalty.label || "Loyal customer discount",
+  discountType: loyalty.discountType || "percentage",
+  value: loyalty.value || 0,
   discount,
 });
 
@@ -230,6 +240,48 @@ const bestOrderOffer = ({ offers, subtotal, discountBase = subtotal }) =>
     .filter(Boolean)
     .sort((left, right) => right.discount - left.discount || right.offer.priority - left.offer.priority)[0] || null;
 
+const loyaltyCandidate = async ({ userId, subtotal, discountBase }) => {
+  if (!userId) return null;
+  const user = await User.findById(userId)
+    .select("isActive loyaltyDiscount")
+    .lean();
+  const loyalty = user?.loyaltyDiscount;
+  if (!user || user.isActive === false || !loyalty?.isEnabled) return null;
+  if (loyalty.expiresAt && new Date(loyalty.expiresAt) <= new Date()) return null;
+  if (subtotal < Number(loyalty.minimumOrder || 0)) return null;
+
+  let discount =
+    loyalty.discountType === "fixed"
+      ? Number(loyalty.value || 0)
+      : (discountBase * Number(loyalty.value || 0)) / 100;
+  if (loyalty.maxDiscount !== null && loyalty.maxDiscount !== undefined)
+    discount = Math.min(discount, Number(loyalty.maxDiscount || 0));
+  discount = Math.min(discountBase, roundedMoney(discount));
+  if (discount <= 0) return null;
+
+  const label = loyalty.label || "Loyal customer discount";
+  return {
+    kind: "loyalty",
+    label,
+    offer: {
+      name: label,
+      description: loyalty.note || "Customer-specific loyalty saving.",
+      dealType: "discount",
+      discountType: loyalty.discountType || "percentage",
+      value: Number(loyalty.value || 0),
+      appliesTo: "order",
+      minimumOrder: Number(loyalty.minimumOrder || 0),
+      maxDiscount: loyalty.maxDiscount ?? null,
+      priority: 0,
+      startsAt: null,
+      expiresAt: loyalty.expiresAt || null,
+    },
+    loyalty,
+    discount,
+    details: [],
+  };
+};
+
 const cartItemsForProduct = (items, id) => items.filter((item) => productId(itemProduct(item)) === id && itemQuantity(item) > 0);
 
 const comboCandidate = ({ offer, items, subtotal }) => {
@@ -350,7 +402,7 @@ export const getComboSuggestionsForCart = async (items = []) => {
   const offers = await Offer.find({ ...activeOfferFilter(), dealType: "combo" })
     .populate({
       path: "products",
-      select: "name price image options isAvailable stock",
+      select: "name price image options isAvailable stock availabilitySchedule",
     });
 
   return offers
@@ -369,6 +421,9 @@ export const getComboSuggestionsForCart = async (items = []) => {
       if (
         missingProducts.some(
           (product) => product.isAvailable === false || Number(product.stock || 0) <= 0,
+        ) ||
+        missingProducts.some(
+          (product) => productAvailability(product).isOrderable === false,
         )
       ) {
         return null;
@@ -490,7 +545,12 @@ export const selectBestDiscount = async ({ items, subtotal, userId, couponCode =
   const orderOffer = offers.length
     ? bestOrderOffer({ offers, subtotal: pricingSubtotal, discountBase: remainingSubtotal })
     : null;
-  const extraAutomaticOffer = [comboOffer, orderOffer]
+  const customerLoyaltyOffer = await loyaltyCandidate({
+    userId,
+    subtotal: pricingSubtotal,
+    discountBase: remainingSubtotal,
+  });
+  const extraAutomaticOffer = [comboOffer, orderOffer, customerLoyaltyOffer]
     .filter(Boolean)
     .sort((left, right) => right.discount - left.discount || Number(right.offer.priority || 0) - Number(left.offer.priority || 0))[0] || null;
   const automaticOffer = combinedAutomaticCandidate({ itemOffers: itemOffer, extraOffer: extraAutomaticOffer });
@@ -530,7 +590,9 @@ export const selectBestDiscount = async ({ items, subtotal, userId, couponCode =
             itemDiscount,
             extraDiscount,
             offerDiscount: extraDiscount,
+            loyaltyDiscount: extraAutomaticOffer.kind === "loyalty" ? extraDiscount : 0,
             offer: extraAutomaticOffer.offer,
+            loyalty: extraAutomaticOffer.loyalty || null,
             details: [...itemDetails, ...(extraAutomaticOffer.details || [])],
             kind: extraAutomaticOffer.kind,
           }
@@ -553,6 +615,7 @@ export const selectBestDiscount = async ({ items, subtotal, userId, couponCode =
     automaticOffer,
     itemOffer,
     extraAutomaticOffer,
+    loyaltyOffer: customerLoyaltyOffer,
     couponResult,
     applied,
     itemDiscount,

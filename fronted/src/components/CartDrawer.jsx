@@ -31,20 +31,25 @@ export default function CartDrawer({ onClose }) {
     window.addEventListener("harmain-cart-updated", refresh);
     return () => window.removeEventListener("harmain-cart-updated", refresh);
   }, []);
-  const change = async (id, quantity, optionName = "", specialInstructions = "") => {
-    if (quantity < 1) return remove(id, optionName, specialInstructions);
-    await api.patch(`/cart/${id}`, { quantity, optionName, specialInstructions });
+  const change = async (id, quantity, optionName = "", specialInstructions = "", addOnsKey = "") => {
+    if (quantity < 1) return remove(id, optionName, specialInstructions, addOnsKey);
+    await api.patch(`/cart/${id}`, { quantity, optionName, specialInstructions, addOnsKey });
     await load();
     window.dispatchEvent(new Event("harmain-cart-updated"));
   };
-  const remove = async (id, optionName = "", specialInstructions = "") => {
-    await api.delete(`/cart/${id}`, { params: { optionName, specialInstructions } });
+  const remove = async (id, optionName = "", specialInstructions = "", addOnsKey = "") => {
+    await api.delete(`/cart/${id}`, { params: { optionName, specialInstructions, addOnsKey } });
     await load();
     window.dispatchEvent(new Event("harmain-cart-updated"));
   };
   const add = async (id) => {
     const product = products.find((entry) => entry._id === id);
-    if (!product || product.isAvailable === false || Number(product.stock) <= 0)
+    if (
+      !product ||
+      product.isAvailable === false ||
+      product.isOrderable === false ||
+      Number(product.stock) <= 0
+    )
       return;
     await api.post("/cart", { productId: id, quantity: 1 });
     await load();
@@ -73,6 +78,7 @@ export default function CartDrawer({ onClose }) {
   const recommendations = products.filter(
     (product) =>
       product.isAvailable !== false &&
+      product.isOrderable !== false &&
       Number(product.stock) > 0 &&
       !items.some((item) => item.product?._id === product._id),
   );
@@ -107,10 +113,10 @@ export default function CartDrawer({ onClose }) {
         ) : (
           <div className="space-y-3">
             {items?.map(
-              ({ product, quantity, unitPrice, optionName, specialInstructions }) =>
+              ({ product, quantity, unitPrice, optionName, specialInstructions, addOns = [], addOnsKey = "" }) =>
                 product && (
                   <article
-                    key={`${product._id}-${optionName || "regular"}-${specialInstructions || "no-note"}`}
+                    key={`${product._id}-${optionName || "regular"}-${specialInstructions || "no-note"}-${addOnsKey || "no-addons"}`}
                     className="flex gap-3 p-3 bg-white border border-red-100 shadow-sm rounded-2xl"
                   >
                     <div className="w-16 h-16 overflow-hidden shrink-0 rounded-xl bg-red-50">
@@ -134,12 +140,18 @@ export default function CartDrawer({ onClose }) {
                             </p>
                           )}
                           {specialInstructions && <p className="mt-0.5 text-xs text-gray-500 line-clamp-1">Note: {specialInstructions}</p>}
+                          {addOns.length > 0 && (
+                            <p className="mt-0.5 text-xs font-medium text-gray-500 line-clamp-2">
+                              Add-ons:{" "}
+                              {addOns.map((addOn) => `${addOn.name} (+Rs. ${addOn.price})`).join(", ")}
+                            </p>
+                          )}
                           <p className="mt-1 text-sm font-bold text-red-700">
                             Rs. {unitPrice ?? product.price}
                           </p>
                         </div>
                         <button
-                          onClick={() => remove(product._id, optionName, specialInstructions)}
+                          onClick={() => remove(product._id, optionName, specialInstructions, addOnsKey)}
                           className="flex items-center justify-center w-8 h-8 text-center text-red-600 transition rounded-full hover:bg-red-50"
                         >
                           <FaTrash size={13} />
@@ -148,14 +160,14 @@ export default function CartDrawer({ onClose }) {
                       <div className="flex items-center justify-between mt-2">
                         <div className="flex items-center border border-red-100 rounded-lg bg-red-50">
                           <button
-                            onClick={() => change(product._id, quantity - 1, optionName, specialInstructions)}
+                            onClick={() => change(product._id, quantity - 1, optionName, specialInstructions, addOnsKey)}
                             className="p-2 text-red-700"
                           >
                             <FaMinus size={10} />
                           </button>
                           <b className="text-sm text-center w-7">{quantity}</b>
                           <button
-                            onClick={() => change(product._id, quantity + 1, optionName, specialInstructions)}
+                            onClick={() => change(product._id, quantity + 1, optionName, specialInstructions, addOnsKey)}
                             className="p-2 text-red-700"
                           >
                             <FaPlus size={10} />

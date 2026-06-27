@@ -219,6 +219,14 @@ export default function OrderDetailsModal({
                     Note: {item.specialInstructions}
                   </p>
                 )}
+                {item.addOns?.length > 0 && (
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    Add-ons:{" "}
+                    {item.addOns
+                      .map((addOn) => `${addOn.name} (+${money(addOn.price)})`)
+                      .join(", ")}
+                  </p>
+                )}
               </div>
               <b className="text-sm text-right text-slate-800">
                 {money(Number(item.price || 0) * itemTotalQuantity(item))}
@@ -241,6 +249,12 @@ export default function OrderDetailsModal({
               {order.offer?.name && !hasOfferBreakdownLine && (
                 <small className="col-span-2 -mt-1 text-[11px] font-bold text-slate-500">
                   Offer {order.offer.name}: - {money(order.offer.discount)}
+                </small>
+              )}
+              {order.loyaltyDiscount && (
+                <small className="col-span-2 -mt-1 text-[11px] font-bold text-slate-500">
+                  {order.loyaltyDiscount.label}: -{" "}
+                  {money(order.loyaltyDiscount.discount)}
                 </small>
               )}
               {offerBreakdown.map((detail, index) => (

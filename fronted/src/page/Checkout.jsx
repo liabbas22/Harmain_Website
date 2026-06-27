@@ -42,6 +42,7 @@ const lineKeyForItem = (item) =>
     String(item.product?._id || item.product || ""),
     item.optionName || "",
     item.specialInstructions || "",
+    item.addOnsKey || "",
   ].join("::");
 const detailMatchesItem = (detail, item) =>
   detail?.lineKey
@@ -55,10 +56,20 @@ const automaticSavingName = (offer) =>
 const extraSavingLabel = (applied) => {
   if (!applied) return "Extra savings";
   if (applied.type === "coupon") return `Coupon (${applied.label})`;
+  if (applied.kind === "loyalty") return "Loyalty discount";
   if (applied.kind === "combo") return `Combo (${applied.label})`;
   if (applied.kind === "order") return `Offer (${applied.label})`;
   return "Automatic offer";
 };
+const addressToForm = (address = {}, fallback = {}) => ({
+  fullName: address.fullName || fallback.name || "",
+  phone: address.phone || fallback.phone || "",
+  line1: address.line1 || "",
+  line2: address.line2 || "",
+  city: address.city || "Karachi",
+  area: address.area || "",
+  instructions: address.instructions || "",
+});
 const SummarySkeleton = () => (
   <div className="space-y-3">
     {[0, 1, 2].map((item) => (
@@ -101,16 +112,21 @@ export default function Checkout() {
   const [showCouponForm, setShowCouponForm] = useState(false);
   const [cartLoading, setCartLoading] = useState(true);
   const [quoteLoading, setQuoteLoading] = useState(true);
+  const [savedAddresses, setSavedAddresses] = useState([]);
+  const [selectedAddressId, setSelectedAddressId] = useState("");
+  const [saveAddress, setSaveAddress] = useState(true);
   useEffect(() => {
     let isMounted = true;
 
     const loadCheckout = async () => {
       setCartLoading(true);
       setQuoteLoading(true);
-      const [cartResult, quoteResult, couponResult] = await Promise.allSettled([
+      const [cartResult, quoteResult, couponResult, profileResult] =
+        await Promise.allSettled([
         api.get("/cart"),
         api.post("/offers/quote", { couponCode: "" }),
         api.get("/coupons/availability"),
+        api.get("/auth/me"),
       ]);
 
       if (!isMounted) return;
@@ -129,6 +145,24 @@ export default function Checkout() {
           ? Boolean(couponResult.value.data.available)
           : false,
       );
+      if (profileResult.status === "fulfilled") {
+        const user = profileResult.value.data.user || {};
+        const addresses = user.savedAddresses || [];
+        const defaultAddress =
+          addresses.find((address) => address.isDefault) || addresses[0];
+        setSavedAddresses(addresses);
+        setSaveAddress(addresses.length === 0);
+        if (defaultAddress) {
+          setSelectedAddressId(defaultAddress._id);
+          setForm(addressToForm(defaultAddress, user));
+        } else {
+          setForm((current) => ({
+            ...current,
+            fullName: current.fullName || user.name || "",
+            phone: current.phone || user.phone || "",
+          }));
+        }
+      }
       setCartLoading(false);
       setQuoteLoading(false);
     };
@@ -171,6 +205,20 @@ export default function Checkout() {
   const canPlaceOrder = paidTotal >= MINIMUM_ORDER && !deliveryUnavailable;
   const update = (name) => (event) =>
     setForm({ ...form, [name]: event.target.value });
+  const selectSavedAddress = (address) => {
+    setSelectedAddressId(address._id);
+    setForm(addressToForm(address, form));
+  };
+  const useNewAddress = () => {
+    const savedUser = JSON.parse(localStorage.getItem("harmain_user") || "null");
+    setSelectedAddressId("");
+    setForm({
+      ...initialForm,
+      fullName: savedUser?.name || form.fullName || "",
+      phone: savedUser?.phone || form.phone || "",
+    });
+    setSaveAddress(true);
+  };
   const validate = () => {
     const next = {};
     if (form.fullName.trim().length < 2)
@@ -248,6 +296,8 @@ export default function Checkout() {
         paymentMethod: "cash_on_delivery",
         deliveryAddress: form,
         couponCode: appliedDiscount?.type === "coupon" ? couponCode : "",
+        saveAddress,
+        addressId: saveAddress ? selectedAddressId : "",
       });
       setStatus(
         `Order #${data._id.slice(-6).toUpperCase()} placed successfully.`,
@@ -286,6 +336,48 @@ export default function Checkout() {
                 </p>
               </div>
             </div>
+            {savedAddresses.length > 0 && (
+              <section className="mb-7 rounded-2xl border border-red-100 bg-red-50/60 p-3">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-extrabold text-gray-900">
+                    Saved addresses
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={useNewAddress}
+                    className="text-xs font-extrabold text-red-700 hover:text-red-800"
+                  >
+                    Use another address
+                  </button>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {savedAddresses.map((address) => (
+                    <button
+                      type="button"
+                      key={address._id}
+                      onClick={() => selectSavedAddress(address)}
+                      className={`rounded-xl border bg-white p-3 text-left transition ${selectedAddressId === address._id ? "border-red-600 ring-4 ring-red-100" : "border-red-100 hover:border-red-300"}`}
+                    >
+                      <span className="flex items-center justify-between gap-2">
+                        <b className="text-sm text-gray-900">
+                          {address.label || "Address"}
+                        </b>
+                        {address.isDefault && (
+                          <small className="rounded-full bg-red-700 px-2 py-0.5 text-[10px] font-extrabold text-white">
+                            Default
+                          </small>
+                        )}
+                      </span>
+                      <span className="mt-2 line-clamp-2 block text-xs leading-5 text-gray-500">
+                        {address.line1}
+                        {address.area ? `, ${address.area}` : ""},{" "}
+                        {address.city}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
             <div className="grid gap-5 sm:grid-cols-2">
               <Field
                 label="Full name"
@@ -352,6 +444,18 @@ export default function Checkout() {
                 />
               </Field>
             </div>
+            <label className="mt-5 flex items-start gap-3 rounded-xl border border-red-100 bg-white px-4 py-3 text-sm font-bold text-gray-700">
+              <input
+                type="checkbox"
+                checked={saveAddress}
+                onChange={(event) => setSaveAddress(event.target.checked)}
+                className="mt-1 h-4 w-4 accent-red-700"
+              />
+              <span>
+                Save this address for faster checkout
+                {selectedAddressId ? " and update saved details" : ""}
+              </span>
+            </label>
             <div className="p-4 border border-red-100 mt-7 rounded-xl bg-red-50">
               <p className="text-sm font-extrabold text-gray-900">
                 Payment method
@@ -403,7 +507,7 @@ export default function Checkout() {
                 <SummarySkeleton />
               ) : (
                 items.map((item) => {
-                  const { product, quantity, unitPrice, optionName } = item;
+                  const { product, quantity, unitPrice, optionName, addOns = [], addOnsKey = "" } = item;
                   const itemOffer = activeOfferDetails.find((detail) =>
                     detailMatchesItem(detail, item),
                   );
@@ -415,7 +519,7 @@ export default function Checkout() {
                   return (
                     product && (
                       <div
-                        key={`${product._id}-${optionName || "regular"}`}
+                        key={`${product._id}-${optionName || "regular"}-${addOnsKey || "no-addons"}`}
                         className="flex justify-between gap-3"
                       >
                         <span className="min-w-0 text-gray-600">
@@ -432,6 +536,14 @@ export default function Checkout() {
                             <small className="block mt-1 text-xs font-bold text-green-700">
                               {itemOffer.offerName} ({itemOffer.offerLabel}) -
                               Rs. {formatMoney(itemOffer.discount)}
+                            </small>
+                          )}
+                          {addOns.length > 0 && (
+                            <small className="block mt-1 text-xs font-semibold text-gray-500">
+                              Add-ons:{" "}
+                              {addOns
+                                .map((addOn) => `${addOn.name} (+Rs. ${formatMoney(addOn.price)})`)
+                                .join(", ")}
                             </small>
                           )}
                         </span>

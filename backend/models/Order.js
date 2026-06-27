@@ -1,10 +1,25 @@
 import mongoose from "mongoose";
 
+const addOnSnapshotSchema = new mongoose.Schema({
+  name: { type: String, required: true, trim: true },
+  price: { type: Number, required: true, min: 0 },
+}, { _id: false });
+
+const comboItemSnapshotSchema = new mongoose.Schema({
+  product: { type: mongoose.Schema.Types.ObjectId, ref: "Product", default: null },
+  name: { type: String, required: true, trim: true },
+  optionName: { type: String, default: "", trim: true },
+  quantity: { type: Number, required: true, min: 1 },
+}, { _id: false });
+
 const itemSchema = new mongoose.Schema({
   product: { type: mongoose.Schema.Types.ObjectId, ref: "Product", required: true },
   name: { type: String, required: true },
   optionName: { type: String, default: "" },
   specialInstructions: { type: String, default: "", trim: true, maxlength: 500 },
+  addOns: { type: [addOnSnapshotSchema], default: [] },
+  addOnsKey: { type: String, default: "" },
+  comboItems: { type: [comboItemSnapshotSchema], default: [] },
   image: { type: String, default: "" },
   price: { type: Number, required: true, min: 0 },
   quantity: { type: Number, required: true, min: 1 },
@@ -57,6 +72,13 @@ const offerBreakdownSchema = new mongoose.Schema({
   discount: { type: Number, required: true, min: 0 },
 }, { _id: false });
 
+const loyaltyDiscountSchema = new mongoose.Schema({
+  label: { type: String, required: true, trim: true },
+  discountType: { type: String, enum: ["percentage", "fixed"], required: true },
+  value: { type: Number, required: true, min: 0 },
+  discount: { type: Number, required: true, min: 0 },
+}, { _id: false });
+
 const orderSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   items: { type: [itemSchema], required: true },
@@ -76,6 +98,7 @@ const orderSchema = new mongoose.Schema({
   subtotal: { type: Number, required: true, min: 0 },
   coupon: { type: couponSchema, default: null },
   offer: { type: offerSchema, default: null },
+  loyaltyDiscount: { type: loyaltyDiscountSchema, default: null },
   offerBreakdown: { type: [offerBreakdownSchema], default: [] },
   discount: { type: Number, default: 0, min: 0 },
   deliveryFee: { type: Number, default: 0, min: 0 },

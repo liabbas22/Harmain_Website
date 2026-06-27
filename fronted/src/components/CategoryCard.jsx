@@ -8,15 +8,19 @@ const CategoryCard = ({ item }) => {
   const [modalAnimation, setModalAnimation] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [selectedOption, setSelectedOption] = useState(item?.options?.[0]);
+  const [selectedAddOns, setSelectedAddOns] = useState([]);
   const [specialInstructions, setSpecialInstructions] = useState("");
   const [toast, setToast] = useState(false);
   const isOutOfStock = item?.isOutOfStock === true || Number(item?.stock) <= 0;
   const isAvailable = item?.isAvailable !== false && !isOutOfStock;
-  const availabilityLabel = isOutOfStock ? "Stock out" : "Unavailable";
+  const availabilityLabel = isOutOfStock
+    ? "Stock out"
+    : item?.unavailableReason || "Unavailable";
 
   const handleOpenModal = () => {
     setQuantity(1);
     setSelectedOption(item?.options?.[0]);
+    setSelectedAddOns([]);
     setSpecialInstructions("");
     setModelVisible(true);
 
@@ -38,6 +42,7 @@ const CategoryCard = ({ item }) => {
     quantity = 1,
     selectedOption = item?.options?.[0],
     instructions = "",
+    addOns = [],
   ) => {
     event?.stopPropagation();
     if (!isAvailable) return;
@@ -49,6 +54,7 @@ const CategoryCard = ({ item }) => {
         quantity,
         optionName: selectedOption?.name || "",
         specialInstructions: instructions,
+        addOns: addOns.map((addOn) => addOn._id || addOn.name),
       });
       window.dispatchEvent(new Event("harmain-cart-updated"));
       handleCloseModal();
@@ -169,8 +175,16 @@ const CategoryCard = ({ item }) => {
           handleCloseModal={handleCloseModal}
           selectedOption={selectedOption}
           setSelectedOption={setSelectedOption}
+          selectedAddOns={selectedAddOns}
+          setSelectedAddOns={setSelectedAddOns}
           onAddToCart={() =>
-            addToCart(null, quantity, selectedOption, specialInstructions)
+            addToCart(
+              null,
+              quantity,
+              selectedOption,
+              specialInstructions,
+              selectedAddOns,
+            )
           }
         />
       )}
