@@ -18,6 +18,7 @@ import DeliverySettingsPage from "./features/settings/DeliverySettingsPage";
 import CancelOrderModal from "./features/orders/CancelOrderModal";
 import OrdersPage from "./features/orders/OrdersPage";
 import OrderDetailsModal from "./features/orders/OrderDetailsModal";
+import ReportsPage from "./features/reports/ReportsPage";
 import RiderEditor from "./features/riders/RiderEditor";
 import RidersPage from "./features/riders/RidersPage";
 import ProductEditor from "./features/products/ProductEditor";
@@ -261,6 +262,10 @@ function App() {
   const [customerDetailLoading, setCustomerDetailLoading] = useState(false);
   const [deliverySettings, setDeliverySettings] = useState(null);
   const [deliverySettingsLoading, setDeliverySettingsLoading] = useState(false);
+  const [reportRange, setReportRange] = useState("month");
+  const [report, setReport] = useState(null);
+  const [reportsLoading, setReportsLoading] = useState(false);
+  const [reportsError, setReportsError] = useState("");
   const orderRequestRef = useRef(0);
 
   const logout = useCallback(() => {
@@ -286,6 +291,8 @@ function App() {
     setCustomerStatus("all");
     setCustomerDetail(null);
     setDeliverySettings(null);
+    setReport(null);
+    setReportsError("");
   }, []);
 
   const notify = useCallback((message, type = "success") => setToast({ message, type, id: Date.now() }), []);
@@ -368,6 +375,33 @@ function App() {
   useEffect(() => {
     loadDeliverySettings();
   }, [loadDeliverySettings]);
+
+  const loadReports = useCallback(async () => {
+    if (!session?.token) return;
+    setReportsLoading(true);
+    setReportsError("");
+    try {
+      setReport(await adminApi.getReports(session.token, reportRange));
+    } catch (requestError) {
+      if (requestError.status === 401 || requestError.status === 403) logout();
+      else setReportsError(requestError.message || "Could not load reports.");
+    } finally {
+      setReportsLoading(false);
+    }
+  }, [logout, reportRange, session?.token]);
+
+  useEffect(() => {
+    if (view === "reports") loadReports();
+  }, [loadReports, view]);
+
+  useEffect(() => {
+    if (view !== "reports") return undefined;
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") loadReports();
+    };
+    const interval = window.setInterval(refreshWhenVisible, 60000);
+    return () => window.clearInterval(interval);
+  }, [loadReports, view]);
 
   const loadFilteredOrders = useCallback(async (filter) => {
     if (!session?.token) return;
@@ -920,8 +954,8 @@ function App() {
     message: entity === "product" ? "This product will be permanently removed from the menu and cannot be recovered." : entity === "coupon" ? "This coupon will no longer be available at checkout. This action cannot be undone." : entity === "offer" ? "This automatic offer will no longer be available at checkout. This action cannot be undone." : "Delete this category only after its products have been reassigned. This action cannot be undone.",
   });
 
-  const viewLoading = view === "orders" ? ordersLoading : view === "coupons" ? couponsLoading : view === "offers" ? offersLoading : view === "customers" ? customersLoading : view === "delivery" ? deliverySettingsLoading : loading;
-  const refreshView = view === "orders" ? () => loadFilteredOrders(orderFilter) : view === "coupons" ? loadCoupons : view === "offers" ? loadOffers : view === "customers" ? loadCustomers : view === "delivery" ? loadDeliverySettings : load;
+  const viewLoading = view === "orders" ? ordersLoading : view === "coupons" ? couponsLoading : view === "offers" ? offersLoading : view === "customers" ? customersLoading : view === "delivery" ? deliverySettingsLoading : view === "reports" ? reportsLoading : loading;
+  const refreshView = view === "orders" ? () => loadFilteredOrders(orderFilter) : view === "coupons" ? loadCoupons : view === "offers" ? loadOffers : view === "customers" ? loadCustomers : view === "delivery" ? loadDeliverySettings : view === "reports" ? loadReports : load;
 
   return (
     <>
@@ -931,6 +965,7 @@ function App() {
         {view === "products" && <ProductsPage products={filteredProducts} categories={categories} query={productQuery} categoryFilter={categoryFilter} onQueryChange={setProductQuery} onCategoryFilterChange={setCategoryFilter} onNew={() => setProductEditor({ id: null, values: { ...emptyProduct(categories[0]?._id || ""), options: [{ clientId: newOptionId(), name: "Regular", actualPrice: "", discountPrice: "", tag: "" }] } })} onEdit={(product) => setProductEditor(toProductEditor(product))} onDelete={(product) => requestDelete("product", product)} onExport={exportProducts} onImport={importProducts} busyAction={busyAction} />}
         {view === "categories" && <CategoriesPage categories={categories} products={products} onNew={() => setCategoryEditor({ id: null, values: emptyCategory })} onEdit={(category) => setCategoryEditor({ id: category._id, values: { ...emptyCategory, ...category } })} onDelete={(category) => requestDelete("category", category)} busyAction={busyAction} />}
         {view === "orders" && <OrdersPage orders={filteredOrders} total={filteredOrdersTotal} filter={orderFilter} unreadOrderIds={unreadOrderIds} onMarkOrderRead={markOrderRead} onFilterChange={setOrderFilter} onUpdate={updateOrder} onCancel={(order) => setCancelEditor({ order })} onOpenOrder={setOrderDetails} busyAction={busyAction} loading={ordersLoading} error={ordersError} />}
+        {view === "reports" && <ReportsPage report={report} range={reportRange} onRangeChange={setReportRange} loading={reportsLoading} error={reportsError} />}
         {view === "customers" && <CustomersPage customers={customers} total={customersTotal} search={customerSearch} status={customerStatus} loading={customersLoading} error={customersError} selectedDetail={customerDetail} detailLoading={customerDetailLoading} busyAction={busyAction} onSearchChange={setCustomerSearch} onStatusChange={setCustomerStatus} onOpenCustomer={openCustomer} onCloseCustomer={() => setCustomerDetail(null)} onSaveLoyalty={saveCustomerLoyalty} onAddNote={addCustomerNote} onDeleteNote={deleteCustomerNote} onToggleBlock={toggleCustomerBlock} />}
         {view === "coupons" && <CouponsPage coupons={coupons} onNew={() => setCouponEditor({ id: null, values: { ...emptyCoupon, startsAt: toDateTimeInput(new Date()) } })} onEdit={(coupon) => setCouponEditor(toCouponEditor(coupon))} onDelete={(coupon) => requestDelete("coupon", coupon)} busyAction={busyAction} />}
         {view === "offers" && <OffersPage offers={offers} onNew={() => setOfferEditor({ id: null, values: { ...emptyOffer, startsAt: toDateTimeInput(new Date()) } })} onEdit={(offer) => setOfferEditor(toOfferEditor(offer))} onDelete={(offer) => requestDelete("offer", offer)} busyAction={busyAction} />}

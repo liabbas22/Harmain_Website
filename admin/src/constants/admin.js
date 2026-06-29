@@ -37,11 +37,20 @@ export const ORDER_FILTERS = [
   ["cancelled", "Cancelled"],
 ];
 
+export const REPORT_RANGES = [
+  ["today", "Today"],
+  ["week", "Last 7 days"],
+  ["month", "Last 30 days"],
+  ["quarter", "Last 90 days"],
+  ["year", "This year"],
+];
+
 export const navigationItems = [
   ["overview", "Overview"],
   ["products", "Products"],
   ["categories", "Categories"],
   ["orders", "Orders"],
+  ["reports", "Reports"],
   ["customers", "Customers"],
   ["coupons", "Coupons"],
   ["offers", "Offers"],

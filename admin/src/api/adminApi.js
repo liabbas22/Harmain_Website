@@ -26,6 +26,7 @@ export const adminApi = {
   getProducts: (token) => request("/products?limit=100", { token }),
   getCategories: (token) => request("/categories?all=true", { token }),
   getOrders: (token, filter = "all") => request(`/orders?limit=100&filter=${encodeURIComponent(filter)}`, { token }),
+  getReports: (token, range = "month") => request(`/reports?range=${encodeURIComponent(range)}`, { token }),
   getRiders: (token) => request("/auth/admin/riders", { token }),
   getCoupons: (token) => request("/coupons", { token }),
   getOffers: (token) => request("/offers", { token }),

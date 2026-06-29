@@ -14,6 +14,7 @@ import couponRoutes from "./routes/couponRoutes.js";
 import customerRoutes from "./routes/customerRoutes.js";
 import offerRoutes from "./routes/offerRoutes.js";
 import orderRoutes from "./routes/orderRoutes.js";
+import reportRoutes from "./routes/reportRoutes.js";
 import settingsRoutes from "./routes/settingsRoutes.js";
 import { errorHandler, notFound } from "./middleware/errorMiddleware.js";
 
@@ -55,6 +56,7 @@ app.use("/api/coupons", couponRoutes);
 app.use("/api/customers", customerRoutes);
 app.use("/api/offers", offerRoutes);
 app.use("/api/orders", orderRoutes);
+app.use("/api/reports", reportRoutes);
 app.use("/api/settings", settingsRoutes);
 
 app.get("/", (_req, res) => {
