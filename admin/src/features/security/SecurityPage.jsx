@@ -31,7 +31,7 @@ function PermissionChips({ permissions = [] }) {
     : permissionOptions.filter(([permission]) => permissions.includes(permission));
 
   if (!visiblePermissions.length)
-    return <span className="text-sm font-bold text-slate-500">No extra permissions</span>;
+    return <span className="text-sm font-bold text-slate-500">No permissions selected</span>;
 
   return (
     <div className="flex flex-wrap gap-2">
@@ -325,11 +325,11 @@ export default function SecurityPage({
                 <div key={role} className="rounded-md border border-slate-200 p-3">
                   <strong className="text-sm text-slate-900">{label}</strong>
                   <p className="mt-1 text-xs font-bold leading-5 text-slate-500">
-                    {role === "owner"
-                      ? "Full security, settings, menu, order, report and staff access."
-                      : role === "manager"
-                        ? "Operational access without admin security management."
-                        : "Order dashboard, order details and status operations only."}
+                  {role === "owner"
+                    ? "Full access to every admin area. Owner does not need checkbox permissions."
+                    : role === "manager"
+                      ? "Access is controlled only by the permissions selected below."
+                      : "Access is controlled only by the permissions selected below."}
                   </p>
                 </div>
               ))}
@@ -410,7 +410,7 @@ export default function SecurityPage({
           </div>
           <div className="mt-4">
             <p className="mb-2 text-xs font-extrabold uppercase tracking-wide text-slate-500">
-              Extra permissions
+              Select permissions
             </p>
             <PermissionChecklist
               value={newAdmin.permissions}
@@ -534,7 +534,7 @@ export default function SecurityPage({
                   </div>
                   <div className="mt-4">
                     <p className="mb-2 text-xs font-extrabold uppercase tracking-wide text-slate-500">
-                      Extra permissions
+                      Select permissions
                     </p>
                     <PermissionChecklist
                       value={draft.permissions}

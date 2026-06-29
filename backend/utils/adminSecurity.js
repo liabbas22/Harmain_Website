@@ -15,17 +15,8 @@ export const ADMIN_PERMISSION_LABELS = {
 
 export const ROLE_PERMISSION_MAP = {
   owner: ["*"],
-  manager: [
-    "dashboard:read",
-    "orders:manage",
-    "menu:manage",
-    "offers:manage",
-    "customers:manage",
-    "delivery:manage",
-    "reports:read",
-    "riders:manage",
-  ],
-  order_staff: ["dashboard:read", "orders:manage"],
+  manager: [],
+  order_staff: [],
 };
 
 export const normalizeAdminRole = (role, fallback = "manager") =>
@@ -39,7 +30,7 @@ export const getAdminRole = (user) => {
 export const getAdminPermissions = (user) => {
   const adminRole = getAdminRole(user);
   if (!adminRole) return [];
-  const basePermissions = ROLE_PERMISSION_MAP[adminRole] || [];
+  const basePermissions = adminRole === "owner" ? ROLE_PERMISSION_MAP.owner : [];
   const customPermissions = Array.isArray(user.permissions) ? user.permissions : [];
   return [...new Set([...basePermissions, ...customPermissions])];
 };
