@@ -23,6 +23,17 @@ export const adminApi = {
   login: (email, password) =>
     request("/auth/admin/login", { method: "POST", body: { email, password } }),
   getProfile: (token) => request("/auth/admin/me", { token }),
+  changePassword: (body, token) =>
+    request("/auth/admin/password", { method: "PATCH", body, token }),
+  logoutAllSessions: (token) =>
+    request("/auth/admin/logout-all", { method: "POST", token }),
+  getAdminUsers: (token) => request("/auth/admin/users", { token }),
+  createAdminUser: (body, token) =>
+    request("/auth/admin/users", { method: "POST", body, token }),
+  updateAdminUser: (id, body, token) =>
+    request(`/auth/admin/users/${id}`, { method: "PATCH", body, token }),
+  getAdminActivity: (token, limit = 50) =>
+    request(`/auth/admin/activity?limit=${encodeURIComponent(limit)}`, { token }),
   getProducts: (token) => request("/products?limit=100", { token }),
   getCategories: (token) => request("/categories?all=true", { token }),
   getOrders: (token, filter = "all") => request(`/orders?limit=100&filter=${encodeURIComponent(filter)}`, { token }),

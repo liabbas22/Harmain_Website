@@ -17,16 +17,18 @@ const createAdmin = async () => {
   const user = await User.findOne({ email });
   if (user) {
     user.role = "admin";
+    user.adminRole = "owner";
     await user.save();
-    console.log("Existing user promoted to admin");
+    console.log("Existing user promoted to owner admin");
   } else {
     await User.create({
       name: ADMIN_NAME.trim(),
       email,
       password: ADMIN_PASSWORD,
       role: "admin",
+      adminRole: "owner",
     });
-    console.log("Admin account created");
+    console.log("Owner admin account created");
   }
   await mongoose.disconnect();
 };

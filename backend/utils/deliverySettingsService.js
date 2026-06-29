@@ -167,6 +167,12 @@ const findDeliveryZone = (settings, address = {}) => {
     })
     .filter(({ cityMatches }) => cityMatches);
 
+  const cityIsAvailable =
+    !cityKey || activeBranches.some((branch) => normalizeKey(branch.city) === cityKey);
+  if (!cityIsAvailable) {
+    return { branches, error: "Delivery is not available in this city." };
+  }
+
   const matched = candidates.find(({ zone }) => zone);
   if (matched) return { branches, ...matched };
 

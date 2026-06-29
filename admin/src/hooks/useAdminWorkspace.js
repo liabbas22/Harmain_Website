@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { adminApi } from "../api/adminApi";
+import { hasAdminPermission } from "../constants/admin";
 
-export function useAdminWorkspace(token, onUnauthorized) {
+export function useAdminWorkspace(token, onUnauthorized, onProfile) {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -15,14 +16,24 @@ export function useAdminWorkspace(token, onUnauthorized) {
     setLoading(true);
     setError("");
     try {
-      const [profile, productResult, categoryResult, orderResult, riderResult] = await Promise.all([
-        adminApi.getProfile(token),
-        adminApi.getProducts(token),
-        adminApi.getCategories(token),
-        adminApi.getOrders(token),
-        adminApi.getRiders(token),
-      ]);
+      const profile = await adminApi.getProfile(token);
       if (profile.user?.role !== "admin") throw new Error("Administrator access is required.");
+      onProfile?.(profile.user);
+
+      const [productResult, categoryResult, orderResult, riderResult] = await Promise.all([
+        hasAdminPermission(profile.user, "menu:manage")
+          ? adminApi.getProducts(token)
+          : Promise.resolve({ products: [] }),
+        hasAdminPermission(profile.user, "menu:manage")
+          ? adminApi.getCategories(token)
+          : Promise.resolve([]),
+        hasAdminPermission(profile.user, "orders:manage")
+          ? adminApi.getOrders(token)
+          : Promise.resolve({ orders: [] }),
+        hasAdminPermission(profile.user, "riders:manage")
+          ? adminApi.getRiders(token)
+          : Promise.resolve([]),
+      ]);
       setProducts(productResult.products || []);
       setCategories(categoryResult || []);
       setOrders(orderResult.orders || []);
@@ -33,7 +44,7 @@ export function useAdminWorkspace(token, onUnauthorized) {
     } finally {
       setLoading(false);
     }
-  }, [onUnauthorized, token]);
+  }, [onProfile, onUnauthorized, token]);
 
   useEffect(() => {
     load();

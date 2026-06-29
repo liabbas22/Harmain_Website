@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import {
   FiCheckCircle,
@@ -53,6 +53,10 @@ const couponMatchesInput = (coupon, code) =>
   coupon?.code && coupon.code === code.trim().toUpperCase();
 const automaticSavingName = (offer) =>
   offer?.label || offer?.name || "Automatic savings";
+const normalizeText = (value) =>
+  String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+const hasOption = (options, value) =>
+  options.some((option) => normalizeText(option.value) === normalizeText(value));
 const extraSavingLabel = (applied) => {
   if (!applied) return "Extra savings";
   if (applied.type === "coupon") return `Coupon (${applied.label})`;
@@ -203,8 +207,6 @@ export default function Checkout() {
     }, 450);
     return () => window.clearTimeout(timer);
   }, [activeCouponCode, cart?.items?.length, cartLoading, form.area, form.city]);
-  if (!localStorage.getItem("harmain_token"))
-    return <Navigate to="/login" replace />;
   const items = cart?.items || [];
   const paidTotal = items.reduce(
     (sum, item) =>
@@ -229,10 +231,85 @@ export default function Checkout() {
     appliedDiscount?.details || [];
   const isCheckingSavings = quoteLoading && items.length > 0;
   const deliveryUnavailable = delivery?.isDeliveryEnabled === false;
+  const deliveryUnavailableMessage =
+    delivery?.message || "Delivery is not available for this city or area.";
+  const deliveryBranches = useMemo(
+    () => (Array.isArray(delivery?.branches) ? delivery.branches : []),
+    [delivery],
+  );
+  const cityOptions = useMemo(() => {
+    const seen = new Set();
+    return deliveryBranches
+      .filter((branch) => branch?.isActive !== false && branch.city)
+      .reduce((options, branch) => {
+        const key = normalizeText(branch.city);
+        if (seen.has(key)) return options;
+        seen.add(key);
+        options.push({ value: branch.city, label: branch.city });
+        return options;
+      }, []);
+  }, [deliveryBranches]);
+  const areaOptions = useMemo(() => {
+    const selectedCity = normalizeText(form.city);
+    const seen = new Set();
+    return deliveryBranches
+      .filter(
+        (branch) =>
+          branch?.isActive !== false &&
+          normalizeText(branch.city) === selectedCity,
+      )
+      .flatMap((branch) =>
+        (branch.zones || [])
+          .filter((zone) => zone?.isActive !== false)
+          .flatMap((zone) => {
+            const areas = Array.isArray(zone.areas) ? zone.areas : [];
+            return areas.length
+              ? areas.map((area) => ({
+                  value: area,
+                  label: area,
+                  zoneName: zone.name,
+                }))
+              : [
+                  {
+                    value: zone.name,
+                    label: zone.name || "Other delivery area",
+                    zoneName: zone.name,
+                  },
+                ];
+          }),
+      )
+      .reduce((options, area) => {
+        const key = normalizeText(area.value);
+        if (!key || seen.has(key)) return options;
+        seen.add(key);
+        options.push(area);
+        return options;
+      }, []);
+  }, [deliveryBranches, form.city]);
   const canPlaceOrder =
     paidTotal >= minimumOrder &&
     !deliveryUnavailable &&
     delivery?.isMinimumMet !== false;
+
+  useEffect(() => {
+    if (!cityOptions.length) return;
+    if (form.city && hasOption(cityOptions, form.city)) return;
+    setForm((current) => ({
+      ...current,
+      city: cityOptions[0].value,
+      area: "",
+    }));
+  }, [cityOptions, form.city]);
+
+  useEffect(() => {
+    if (!areaOptions.length || !form.area) return;
+    if (hasOption(areaOptions, form.area)) return;
+    setForm((current) => ({ ...current, area: "" }));
+  }, [areaOptions, form.area]);
+
+  if (!localStorage.getItem("harmain_token"))
+    return <Navigate to="/login" replace />;
+
   const update = (name) => (event) =>
     setForm({ ...form, [name]: event.target.value });
   const selectSavedAddress = (address) => {
@@ -313,7 +390,7 @@ export default function Checkout() {
   const submit = async (event) => {
     event.preventDefault();
     if (deliveryUnavailable) {
-      setStatus("Delivery is currently unavailable.");
+      setStatus(deliveryUnavailableMessage);
       return;
     }
     if (!canPlaceOrder) {
@@ -452,20 +529,50 @@ export default function Checkout() {
                   className="w-full h-12 px-3 border border-gray-200 rounded-lg outline-none focus:border-red-500 focus:ring-4 focus:ring-red-100"
                 />
               </Field>
-              <Field label="Area" error={errors.area}>
-                <input
-                  value={form.area}
-                  onChange={update("area")}
-                  placeholder="e.g. Bahadurabad"
-                  className="w-full h-12 px-3 border border-gray-200 rounded-lg outline-none focus:border-red-500 focus:ring-4 focus:ring-red-100"
-                />
-              </Field>
               <Field label="City" error={errors.city}>
-                <input
+                <select
                   value={form.city}
-                  onChange={update("city")}
-                  className="w-full h-12 px-3 border border-gray-200 rounded-lg outline-none focus:border-red-500 focus:ring-4 focus:ring-red-100"
-                />
+                  onChange={(event) =>
+                    setForm({
+                      ...form,
+                      city: event.target.value,
+                      area: "",
+                    })
+                  }
+                  disabled={!cityOptions.length}
+                  className="w-full h-12 px-3 bg-white border border-gray-200 rounded-lg outline-none focus:border-red-500 focus:ring-4 focus:ring-red-100 disabled:bg-gray-50 disabled:text-gray-400"
+                >
+                  {!cityOptions.length && (
+                    <option value={form.city || ""}>Loading delivery cities...</option>
+                  )}
+                  {cityOptions.map((city) => (
+                    <option key={city.value} value={city.value}>
+                      {city.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Area" error={errors.area}>
+                <select
+                  value={hasOption(areaOptions, form.area) ? form.area : ""}
+                  onChange={update("area")}
+                  disabled={!areaOptions.length}
+                  className="w-full h-12 px-3 bg-white border border-gray-200 rounded-lg outline-none focus:border-red-500 focus:ring-4 focus:ring-red-100 disabled:bg-gray-50 disabled:text-gray-400"
+                >
+                  <option value="">
+                    {areaOptions.length
+                      ? "Select delivery area"
+                      : "No delivery areas available"}
+                  </option>
+                  {areaOptions.map((area) => (
+                    <option key={area.value} value={area.value}>
+                      {area.label}
+                    </option>
+                  ))}
+                </select>
+                <span className="block mt-1 text-xs font-semibold text-gray-500">
+                  Only active delivery areas are shown.
+                </span>
               </Field>
               <Field label="Delivery instructions">
                 <input
@@ -513,7 +620,7 @@ export default function Checkout() {
               }
               title={
                 deliveryUnavailable
-                  ? "Delivery is currently unavailable"
+                  ? deliveryUnavailableMessage
                   : !canPlaceOrder
                     ? `Minimum order is Rs. ${formatMoney(minimumOrder)}`
                     : "Place order"
@@ -743,35 +850,39 @@ export default function Checkout() {
                 </div>
               )}
               {!cartLoading && !isCheckingSavings && delivery && (
-                <div className={delivery.isFreeDelivery ? "text-green-700" : "text-gray-600"}>
+                <div className={deliveryUnavailable ? "text-red-700" : delivery.isFreeDelivery ? "text-green-700" : "text-gray-600"}>
                   <div className="flex justify-between">
                     <span>Delivery fee</span>
-                    <b className={delivery.isFreeDelivery ? "text-green-700" : "text-gray-900"}>
-                      {delivery.isFreeDelivery ? "Free" : `Rs. ${formatMoney(deliveryFee)}`}
+                    <b className={deliveryUnavailable ? "text-red-700" : delivery.isFreeDelivery ? "text-green-700" : "text-gray-900"}>
+                      {deliveryUnavailable
+                        ? "Unavailable"
+                        : delivery.isFreeDelivery
+                          ? "Free"
+                          : `Rs. ${formatMoney(deliveryFee)}`}
                     </b>
                   </div>
-                  {delivery.freeDeliveryRemaining > 0 && (
+                  {!deliveryUnavailable && delivery.freeDeliveryRemaining > 0 && (
                     <small className="mt-1 block text-xs text-red-700">
                       Add Rs. {formatMoney(delivery.freeDeliveryRemaining)} more for free delivery.
                     </small>
                   )}
-                  {minimumOrderRemaining > 0 && (
+                  {!deliveryUnavailable && minimumOrderRemaining > 0 && (
                     <small className="mt-1 block text-xs text-red-700">
                       Add Rs. {formatMoney(minimumOrderRemaining)} more to meet the minimum order for this area.
                     </small>
                   )}
-                  {(delivery.selectedBranch || delivery.selectedZone) && (
+                  {!deliveryUnavailable && (delivery.selectedBranch || delivery.selectedZone) && (
                     <small className="mt-1 block text-xs text-gray-400">
                       {delivery.selectedBranch?.name || "Branch"}
                       {delivery.selectedZone?.name ? ` - ${delivery.selectedZone.name}` : ""}
                     </small>
                   )}
-                  {delivery.estimatedMinutes > 0 && (
+                  {!deliveryUnavailable && delivery.estimatedMinutes > 0 && (
                     <small className="mt-1 block text-xs text-gray-400">
                       Estimated delivery: {delivery.estimatedMinutes} minutes
                     </small>
                   )}
-                  {delivery.message && (
+                  {!deliveryUnavailable && delivery.message && (
                     <small className="mt-1 block text-xs text-gray-500">
                       {delivery.message}
                     </small>
@@ -780,7 +891,7 @@ export default function Checkout() {
               )}
               {!cartLoading && !isCheckingSavings && deliveryUnavailable && (
                 <div className="rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
-                  {delivery?.message || "Delivery is currently unavailable."}
+                  {deliveryUnavailableMessage}
                 </div>
               )}
             </div>
@@ -792,7 +903,7 @@ export default function Checkout() {
                   Calculating
                 </span>
               ) : (
-                <span>Rs. {formatMoney(grandTotal)}</span>
+                <span>{deliveryUnavailable ? "Delivery unavailable" : `Rs. ${formatMoney(grandTotal)}`}</span>
               )}
             </div>
           </aside>

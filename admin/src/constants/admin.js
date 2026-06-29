@@ -1,5 +1,30 @@
 export const ADMIN_SESSION_KEY = "harmain_admin_session";
 
+export const ADMIN_ROLE_OPTIONS = [
+  ["owner", "Owner"],
+  ["manager", "Manager"],
+  ["order_staff", "Order Staff"],
+];
+
+export const ADMIN_PERMISSION_LABELS = {
+  "*": "Full owner access",
+  "dashboard:read": "Dashboard overview",
+  "orders:manage": "Orders and kitchen operations",
+  "menu:manage": "Menu, products and categories",
+  "offers:manage": "Coupons and automatic offers",
+  "customers:manage": "Customer profiles",
+  "delivery:manage": "Delivery branches and zones",
+  "reports:read": "Sales reports",
+  "riders:manage": "Delivery team",
+  "security:manage": "Admin security",
+};
+
+export const hasAdminPermission = (user, permission) => {
+  if (!permission) return user?.role === "admin";
+  const permissions = Array.isArray(user?.permissions) ? user.permissions : [];
+  return permissions.includes("*") || permissions.includes(permission);
+};
+
 export const ORDER_STATUSES = [
   "placed",
   "confirmed",
@@ -46,16 +71,17 @@ export const REPORT_RANGES = [
 ];
 
 export const navigationItems = [
-  ["overview", "Overview"],
-  ["products", "Products"],
-  ["categories", "Categories"],
-  ["orders", "Orders"],
-  ["reports", "Reports"],
-  ["customers", "Customers"],
-  ["coupons", "Coupons"],
-  ["offers", "Offers"],
-  ["delivery", "Delivery settings"],
-  ["riders", "Delivery team"],
+  ["overview", "Overview", "dashboard:read"],
+  ["products", "Products", "menu:manage"],
+  ["categories", "Categories", "menu:manage"],
+  ["orders", "Orders", "orders:manage"],
+  ["reports", "Reports", "reports:read"],
+  ["customers", "Customers", "customers:manage"],
+  ["coupons", "Coupons", "offers:manage"],
+  ["offers", "Offers", "offers:manage"],
+  ["delivery", "Delivery settings", "delivery:manage"],
+  ["riders", "Delivery team", "riders:manage"],
+  ["security", "Security"],
 ];
 
 export const emptyProduct = (category = "") => ({
@@ -95,6 +121,16 @@ export const emptyRider = {
   email: "",
   phone: "",
   password: "",
+  isActive: true,
+};
+
+export const emptyAdminUser = {
+  name: "",
+  email: "",
+  phone: "",
+  password: "",
+  adminRole: "manager",
+  permissions: [],
   isActive: true,
 };
 

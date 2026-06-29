@@ -32,8 +32,9 @@ io.use(async (socket, next) => {
     const token = socket.handshake.auth?.token;
     if (!token) return next(new Error("Authentication required"));
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.userId).select("role isActive");
+    const user = await User.findById(decoded.userId).select("role isActive tokenVersion");
     if (!user || user.isActive === false || user.role !== "admin") return next(new Error("Administrator access is required"));
+    if (Number(decoded.tokenVersion || 0) !== Number(user.tokenVersion || 0)) return next(new Error("Session expired"));
     socket.data.userId = user._id.toString();
     return next();
   } catch {

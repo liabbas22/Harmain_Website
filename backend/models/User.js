@@ -204,6 +204,33 @@ const userSchema = new mongoose.Schema(
       default: "user",
     },
 
+    adminRole: {
+      type: String,
+      enum: ["owner", "manager", "order_staff"],
+      default: undefined,
+    },
+
+    permissions: {
+      type: [String],
+      default: [],
+    },
+
+    tokenVersion: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    passwordChangedAt: {
+      type: Date,
+      default: null,
+    },
+
+    lastLoginAt: {
+      type: Date,
+      default: null,
+    },
+
     savedAddresses: {
       type: [savedAddressSchema],
       default: [],
@@ -233,6 +260,7 @@ userSchema.methods.comparePassword = function comparePassword(candidatePassword)
 
 userSchema.index({ role: 1, isActive: 1, name: 1 });
 userSchema.index({ role: 1, createdAt: -1 });
+userSchema.index({ role: 1, adminRole: 1, isActive: 1 });
 
 const User = mongoose.models.User || mongoose.model("User", userSchema);
 export default User;

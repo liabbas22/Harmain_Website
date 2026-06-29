@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { adminApi } from "./api/adminApi";
-import { emptyCategory, emptyCoupon, emptyOffer, emptyProduct, emptyRider } from "./constants/admin";
+import { emptyAdminUser, emptyCategory, emptyCoupon, emptyOffer, emptyProduct, emptyRider, hasAdminPermission, navigationItems } from "./constants/admin";
 import AdminShell from "./components/layout/AdminShell";
 import AlertDialog from "./components/ui/AlertDialog";
 import ConfirmDialog from "./components/ui/ConfirmDialog";
@@ -21,12 +21,13 @@ import OrderDetailsModal from "./features/orders/OrderDetailsModal";
 import ReportsPage from "./features/reports/ReportsPage";
 import RiderEditor from "./features/riders/RiderEditor";
 import RidersPage from "./features/riders/RidersPage";
+import SecurityPage from "./features/security/SecurityPage";
 import ProductEditor from "./features/products/ProductEditor";
 import ProductsPage from "./features/products/ProductsPage";
 import { useAdminWorkspace } from "./hooks/useAdminWorkspace";
 import { useOrderNotifications } from "./hooks/useOrderNotifications";
 import { productCategoryId, shortId } from "./utils/format";
-import { clearAdminSession, readAdminSession } from "./utils/session";
+import { clearAdminSession, readAdminSession, saveAdminSession } from "./utils/session";
 
 const newOptionId = () => `${Date.now()}-${Math.random()}`;
 const newAddOnId = () => `${Date.now()}-${Math.random()}-addon`;
@@ -266,6 +267,10 @@ function App() {
   const [report, setReport] = useState(null);
   const [reportsLoading, setReportsLoading] = useState(false);
   const [reportsError, setReportsError] = useState("");
+  const [adminUsers, setAdminUsers] = useState([]);
+  const [adminActivity, setAdminActivity] = useState([]);
+  const [securityLoading, setSecurityLoading] = useState(false);
+  const [securityError, setSecurityError] = useState("");
   const orderRequestRef = useRef(0);
 
   const logout = useCallback(() => {
@@ -293,15 +298,48 @@ function App() {
     setDeliverySettings(null);
     setReport(null);
     setReportsError("");
+    setAdminUsers([]);
+    setAdminActivity([]);
+    setSecurityError("");
   }, []);
 
   const notify = useCallback((message, type = "success") => setToast({ message, type, id: Date.now() }), []);
 
-  const workspace = useAdminWorkspace(session?.token, logout);
+  const updateSession = useCallback((nextSession) => {
+    setSession((current) => {
+      const updated = {
+        ...(current || {}),
+        ...nextSession,
+        user: {
+          ...(current?.user || {}),
+          ...(nextSession?.user || {}),
+        },
+        token: nextSession?.token || current?.token,
+      };
+      saveAdminSession(updated);
+      return updated;
+    });
+  }, []);
+
+  const can = useCallback(
+    (permission) => hasAdminPermission(session?.user, permission),
+    [session?.user],
+  );
+
+  const syncAdminProfile = useCallback(
+    (user) => updateSession({ user }),
+    [updateSession],
+  );
+
+  const workspace = useAdminWorkspace(session?.token, logout, syncAdminProfile);
   const { products, categories, orders, riders, setProducts, setOrders, loading, error, load, refreshOverview } = workspace;
 
   const loadCoupons = useCallback(async () => {
     if (!session?.token) return;
+    if (!can("offers:manage")) {
+      setCoupons([]);
+      return;
+    }
     setCouponsLoading(true);
     try {
       setCoupons(await adminApi.getCoupons(session.token));
@@ -311,7 +349,7 @@ function App() {
     } finally {
       setCouponsLoading(false);
     }
-  }, [logout, notify, session?.token]);
+  }, [can, logout, notify, session?.token]);
 
   useEffect(() => {
     loadCoupons();
@@ -319,6 +357,10 @@ function App() {
 
   const loadOffers = useCallback(async () => {
     if (!session?.token) return;
+    if (!can("offers:manage")) {
+      setOffers([]);
+      return;
+    }
     setOffersLoading(true);
     try {
       setOffers(await adminApi.getOffers(session.token));
@@ -328,7 +370,7 @@ function App() {
     } finally {
       setOffersLoading(false);
     }
-  }, [logout, notify, session?.token]);
+  }, [can, logout, notify, session?.token]);
 
   useEffect(() => {
     loadOffers();
@@ -336,6 +378,11 @@ function App() {
 
   const loadCustomers = useCallback(async () => {
     if (!session?.token) return;
+    if (!can("customers:manage")) {
+      setCustomers([]);
+      setCustomersTotal(0);
+      return;
+    }
     setCustomersLoading(true);
     setCustomersError("");
     try {
@@ -351,7 +398,7 @@ function App() {
     } finally {
       setCustomersLoading(false);
     }
-  }, [customerSearch, customerStatus, logout, session?.token]);
+  }, [can, customerSearch, customerStatus, logout, session?.token]);
 
   useEffect(() => {
     if (view !== "customers") return undefined;
@@ -361,6 +408,10 @@ function App() {
 
   const loadDeliverySettings = useCallback(async () => {
     if (!session?.token) return;
+    if (!can("delivery:manage")) {
+      setDeliverySettings(null);
+      return;
+    }
     setDeliverySettingsLoading(true);
     try {
       setDeliverySettings(await adminApi.getDeliverySettings(session.token));
@@ -370,7 +421,7 @@ function App() {
     } finally {
       setDeliverySettingsLoading(false);
     }
-  }, [logout, notify, session?.token]);
+  }, [can, logout, notify, session?.token]);
 
   useEffect(() => {
     loadDeliverySettings();
@@ -378,6 +429,10 @@ function App() {
 
   const loadReports = useCallback(async () => {
     if (!session?.token) return;
+    if (!can("reports:read")) {
+      setReport(null);
+      return;
+    }
     setReportsLoading(true);
     setReportsError("");
     try {
@@ -388,11 +443,39 @@ function App() {
     } finally {
       setReportsLoading(false);
     }
-  }, [logout, reportRange, session?.token]);
+  }, [can, logout, reportRange, session?.token]);
 
   useEffect(() => {
     if (view === "reports") loadReports();
   }, [loadReports, view]);
+
+  const loadSecurity = useCallback(async () => {
+    if (!session?.token) return;
+    setSecurityLoading(true);
+    setSecurityError("");
+    try {
+      if (!can("security:manage")) {
+        setAdminUsers([]);
+        setAdminActivity([]);
+        return;
+      }
+      const [adminResult, activityResult] = await Promise.all([
+        adminApi.getAdminUsers(session.token),
+        adminApi.getAdminActivity(session.token, 60),
+      ]);
+      setAdminUsers(adminResult.admins || []);
+      setAdminActivity(activityResult.logs || []);
+    } catch (requestError) {
+      if (requestError.status === 401 || requestError.status === 403) logout();
+      else setSecurityError(requestError.message || "Could not load security settings.");
+    } finally {
+      setSecurityLoading(false);
+    }
+  }, [can, logout, session?.token]);
+
+  useEffect(() => {
+    if (view === "security") loadSecurity();
+  }, [loadSecurity, view]);
 
   useEffect(() => {
     if (view !== "reports") return undefined;
@@ -405,6 +488,11 @@ function App() {
 
   const loadFilteredOrders = useCallback(async (filter) => {
     if (!session?.token) return;
+    if (!can("orders:manage")) {
+      setFilteredOrders([]);
+      setFilteredOrdersTotal(0);
+      return;
+    }
     const requestId = ++orderRequestRef.current;
     setOrdersLoading(true);
     setOrdersError("");
@@ -420,7 +508,7 @@ function App() {
     } finally {
       if (requestId === orderRequestRef.current) setOrdersLoading(false);
     }
-  }, [logout, session?.token]);
+  }, [can, logout, session?.token]);
 
   const handleOrderCreated = useCallback((order) => {
     if (!order?._id) return;
@@ -559,6 +647,13 @@ function App() {
   useEffect(() => {
     if (view === "orders") loadFilteredOrders(orderFilter);
   }, [loadFilteredOrders, orderFilter, view]);
+
+  useEffect(() => {
+    const currentView = navigationItems.find(([id]) => id === view);
+    if (currentView && !hasAdminPermission(session?.user, currentView[2])) {
+      setView("overview");
+    }
+  }, [session?.user, view]);
 
   const markOrderRead = useCallback((orderId) => {
     setUnreadOrderIds((current) => {
@@ -959,6 +1054,68 @@ function App() {
     }
   };
 
+  const createAdminUser = async (values) => {
+    setBusyAction("admin-user-create");
+    try {
+      const result = await adminApi.createAdminUser(values, session.token);
+      setAdminUsers((current) => [result.admin, ...current.filter((admin) => admin._id !== result.admin._id)]);
+      notify("Admin user created.");
+      await loadSecurity();
+      return true;
+    } catch (requestError) {
+      notify(requestError.message || "Admin user could not be created.", "error");
+      return false;
+    } finally {
+      setBusyAction("");
+    }
+  };
+
+  const updateAdminUser = async (adminId, values) => {
+    setBusyAction(`admin-user-${adminId}`);
+    try {
+      const result = await adminApi.updateAdminUser(adminId, values, session.token);
+      setAdminUsers((current) =>
+        current.map((admin) => (admin._id === adminId ? result.admin : admin)),
+      );
+      notify("Admin user updated.");
+      await loadSecurity();
+      return true;
+    } catch (requestError) {
+      notify(requestError.message || "Admin user could not be updated.", "error");
+      return false;
+    } finally {
+      setBusyAction("");
+    }
+  };
+
+  const changePassword = async (values) => {
+    setBusyAction("admin-password-change");
+    try {
+      const result = await adminApi.changePassword(values, session.token);
+      updateSession(result);
+      notify("Password changed and old sessions were invalidated.");
+      await loadSecurity();
+      return true;
+    } catch (requestError) {
+      notify(requestError.message || "Password could not be changed.", "error");
+      return false;
+    } finally {
+      setBusyAction("");
+    }
+  };
+
+  const logoutAllSessions = async () => {
+    setBusyAction("admin-logout-all");
+    try {
+      await adminApi.logoutAllSessions(session.token);
+      logout();
+    } catch (requestError) {
+      notify(requestError.message || "Sessions could not be signed out.", "error");
+    } finally {
+      setBusyAction("");
+    }
+  };
+
   if (!session) return <LoginScreen onLogin={setSession} />;
 
   const requestDelete = (entity, record) => setConfirmation({
@@ -968,8 +1125,8 @@ function App() {
     message: entity === "product" ? "This product will be permanently removed from the menu and cannot be recovered." : entity === "coupon" ? "This coupon will no longer be available at checkout. This action cannot be undone." : entity === "offer" ? "This automatic offer will no longer be available at checkout. This action cannot be undone." : "Delete this category only after its products have been reassigned. This action cannot be undone.",
   });
 
-  const viewLoading = view === "orders" ? ordersLoading : view === "coupons" ? couponsLoading : view === "offers" ? offersLoading : view === "customers" ? customersLoading : view === "delivery" ? deliverySettingsLoading : view === "reports" ? reportsLoading : loading;
-  const refreshView = view === "orders" ? () => loadFilteredOrders(orderFilter) : view === "coupons" ? loadCoupons : view === "offers" ? loadOffers : view === "customers" ? loadCustomers : view === "delivery" ? loadDeliverySettings : view === "reports" ? loadReports : load;
+  const viewLoading = view === "orders" ? ordersLoading : view === "coupons" ? couponsLoading : view === "offers" ? offersLoading : view === "customers" ? customersLoading : view === "delivery" ? deliverySettingsLoading : view === "reports" ? reportsLoading : view === "security" ? securityLoading : loading;
+  const refreshView = view === "orders" ? () => loadFilteredOrders(orderFilter) : view === "coupons" ? loadCoupons : view === "offers" ? loadOffers : view === "customers" ? loadCustomers : view === "delivery" ? loadDeliverySettings : view === "reports" ? loadReports : view === "security" ? loadSecurity : load;
 
   return (
     <>
@@ -985,6 +1142,7 @@ function App() {
         {view === "offers" && <OffersPage offers={offers} onNew={() => setOfferEditor({ id: null, values: { ...emptyOffer, startsAt: toDateTimeInput(new Date()) } })} onEdit={(offer) => setOfferEditor(toOfferEditor(offer))} onDelete={(offer) => requestDelete("offer", offer)} busyAction={busyAction} />}
         {view === "delivery" && <DeliverySettingsPage settings={deliverySettings} loading={deliverySettingsLoading} onSave={saveDeliverySettings} busy={busyAction === "delivery-settings-save"} />}
         {view === "riders" && <RidersPage riders={riders} onNew={() => setRiderEditor({ id: null, values: emptyRider })} onEdit={(rider) => setRiderEditor({ id: rider._id, values: { ...emptyRider, ...rider, password: "" } })} />}
+        {view === "security" && <SecurityPage session={session} admins={adminUsers} activity={adminActivity} emptyAdmin={emptyAdminUser} loading={securityLoading} error={securityError} busyAction={busyAction} canManageSecurity={can("security:manage")} onRefresh={loadSecurity} onCreateAdmin={createAdminUser} onUpdateAdmin={updateAdminUser} onChangePassword={changePassword} onLogoutAllSessions={logoutAllSessions} />}
       </AdminShell>
       {productEditor && <ProductEditor editor={productEditor} categories={categories} products={products} onChange={setProductEditor} onClose={() => setProductEditor(null)} onSave={saveProduct} busy={busyAction === "product-save"} />}
       {categoryEditor && <CategoryEditor editor={categoryEditor} onChange={setCategoryEditor} onClose={() => setCategoryEditor(null)} onSave={saveCategory} busy={busyAction === "category-save"} />}

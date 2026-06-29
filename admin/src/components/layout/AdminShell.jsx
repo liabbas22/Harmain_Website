@@ -1,4 +1,4 @@
-import { navigationItems } from "../../constants/admin";
+import { ADMIN_ROLE_OPTIONS, hasAdminPermission, navigationItems } from "../../constants/admin";
 import Button from "../ui/Button";
 
 export default function AdminShell({
@@ -17,6 +17,12 @@ export default function AdminShell({
     view
       .replaceAll("_", " ")
       .replace(/\b\w/g, (character) => character.toUpperCase());
+  const allowedNavigation = navigationItems.filter(([, , permission]) =>
+    hasAdminPermission(session.user, permission),
+  );
+  const roleLabel =
+    ADMIN_ROLE_OPTIONS.find(([role]) => role === session.user?.adminRole)?.[1] ||
+    "Admin";
 
   return (
     <div className="min-h-screen bg-slate-100 lg:grid lg:grid-cols-[240px_minmax(0,1fr)]">
@@ -33,7 +39,7 @@ export default function AdminShell({
           className="flex gap-1 overflow-x-auto lg:grid"
           aria-label="Admin navigation"
         >
-          {navigationItems.map(([id, label]) => (
+          {allowedNavigation.map(([id, label]) => (
             <button
               key={id}
               onClick={() => onViewChange(id)}
@@ -46,7 +52,7 @@ export default function AdminShell({
         </nav>
         <div className="flex items-center justify-between px-2 pt-3 mt-3 border-t border-slate-700 lg:hidden">
           <span className="pr-3 text-xs font-bold truncate text-slate-300">
-            {session.user?.name || "Administrator"}
+            {session.user?.name || "Administrator"} - {roleLabel}
           </span>
           <Button
             variant="danger"
@@ -66,6 +72,9 @@ export default function AdminShell({
             </strong>
             <small className="mt-1 block truncate text-[10px] text-slate-400">
               {session.user?.email}
+            </small>
+            <small className="mt-1 block text-[10px] font-extrabold uppercase tracking-wide text-red-200">
+              {roleLabel}
             </small>
           </div>
           <Button
