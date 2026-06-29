@@ -95,6 +95,8 @@ const orderSchema = new mongoose.Schema({
   refundAmount: { type: Number, default: 0, min: 0 },
   refundReference: { type: String, default: "", trim: true, maxlength: 120 },
   refundedAt: { type: Date, default: null },
+  stockRestored: { type: Boolean, default: false },
+  stockRestoredAt: { type: Date, default: null },
   subtotal: { type: Number, required: true, min: 0 },
   coupon: { type: couponSchema, default: null },
   offer: { type: offerSchema, default: null },

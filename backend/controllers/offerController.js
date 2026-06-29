@@ -199,7 +199,10 @@ export const quoteBestDiscount = asyncHandler(async (req, res) => {
   const selection = await selectBestDiscount({ items, subtotal: paidSubtotal, userId: req.user._id, couponCode: req.body.couponCode || "" });
   const subtotal = selection.subtotal ?? paidSubtotal;
   const discount = selection.applied?.discount || 0;
-  const delivery = await calculateDeliveryCharge(paidSubtotal);
+  const delivery = await calculateDeliveryCharge(
+    paidSubtotal,
+    req.body.deliveryAddress || {},
+  );
   res.json({
     subtotal,
     paidSubtotal,

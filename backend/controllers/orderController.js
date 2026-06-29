@@ -176,6 +176,70 @@ const comboItemSnapshots = (product) =>
         })
         .filter((comboItem) => comboItem.name)
     : [];
+const orderItemStockQuantity = (item) => {
+  const grossQuantity = Number(item.grossQuantity || 0);
+  const paidQuantity = Number(item.quantity || 0);
+  const freeQuantity = Number(item.freeQuantity || 0);
+  const quantity = grossQuantity > 0 ? grossQuantity : paidQuantity + freeQuantity;
+  return Number.isFinite(quantity) ? Math.max(0, Math.floor(quantity)) : 0;
+};
+const stockProductPayload = (product) => ({
+  _id: product._id.toString(),
+  name: product.name,
+  image: product.image || "",
+  isAvailable: product.isAvailable !== false,
+  stock: Number(product.stock || 0),
+});
+const emitStockRestoredEvent = (req, product, quantity) => {
+  if (!product?._id || quantity <= 0) return;
+  req.app
+    .get("io")
+    ?.to("admin-orders")
+    .emit("stock:restored", {
+      product: stockProductPayload(product),
+      quantity,
+    });
+};
+const restoreCancelledOrderStock = async (order) => {
+  const stockByProduct = new Map();
+  (order.items || []).forEach((item) => {
+    const productId = (item.product?._id || item.product || "").toString();
+    const quantity = orderItemStockQuantity(item);
+    if (!productId || quantity <= 0) return;
+    stockByProduct.set(productId, (stockByProduct.get(productId) || 0) + quantity);
+  });
+  if (!stockByProduct.size) return [];
+
+  const stockRestoredAt = new Date();
+  const claimedOrder = await Order.findOneAndUpdate(
+    { _id: order._id, stockRestored: { $ne: true } },
+    { $set: { stockRestored: true, stockRestoredAt } },
+    { new: true },
+  ).select("stockRestored stockRestoredAt");
+  if (!claimedOrder) return [];
+
+  order.stockRestored = true;
+  order.stockRestoredAt = claimedOrder.stockRestoredAt || stockRestoredAt;
+
+  const restoredProducts = await Promise.all(
+    [...stockByProduct.entries()].map(async ([productId, quantity]) => {
+      const product = await Product.findByIdAndUpdate(
+        productId,
+        { $inc: { stock: quantity } },
+        { new: true },
+      );
+      if (!product) return null;
+      const nextStock = Number(product.stock);
+      return {
+        product,
+        quantity,
+        previousStock: Number.isFinite(nextStock) ? nextStock - quantity : undefined,
+      };
+    }),
+  );
+
+  return restoredProducts.filter(Boolean);
+};
 
 export const checkout = asyncHandler(async (req, res) => {
   const {
@@ -256,10 +320,16 @@ export const checkout = asyncHandler(async (req, res) => {
     (sum, item) => sum + item.price * item.quantity,
     0,
   );
-  if (paidSubtotal < MINIMUM_ORDER_AMOUNT)
+  const delivery = await calculateDeliveryCharge(paidSubtotal, addressForOrder);
+  if (!delivery.isDeliveryEnabled)
+    return res.status(400).json({
+      message: delivery.message || "Delivery is currently unavailable",
+    });
+  const minimumOrderAmount = delivery.minimumOrder || MINIMUM_ORDER_AMOUNT;
+  if (paidSubtotal < minimumOrderAmount)
     return res
       .status(400)
-      .json({ message: `Minimum order amount is Rs. ${MINIMUM_ORDER_AMOUNT}` });
+      .json({ message: `Minimum order amount is Rs. ${minimumOrderAmount}` });
 
   const discountSelection = await selectBestDiscount({ items: cart.items, subtotal: paidSubtotal, userId: req.user._id, couponCode });
   const discount = discountSelection.applied?.discount || 0;
@@ -299,8 +369,6 @@ export const checkout = asyncHandler(async (req, res) => {
       .status(400)
       .json({ message: "One or more free offer items are out of stock" });
 
-  const delivery = await calculateDeliveryCharge(paidSubtotal);
-  if (!delivery.isDeliveryEnabled) return res.status(400).json({ message: "Delivery is currently unavailable" });
   const deliveryFee = delivery.deliveryFee;
   if (discountSelection.applied?.type === "coupon") await claimCouponUsage(discountSelection.applied.coupon);
 
@@ -425,6 +493,12 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
   const nextOrderStatus = orderStatus || order.orderStatus;
   const isCancelling =
     nextOrderStatus === "cancelled" && order.orderStatus !== "cancelled";
+  let restoredProducts = [];
+
+  if (order.orderStatus === "cancelled" && nextOrderStatus !== "cancelled")
+    return res
+      .status(400)
+      .json({ message: "Cancelled orders cannot be reopened" });
 
   if (isCancelling && !cancellationReason)
     return res
@@ -478,6 +552,7 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
 
   if (isCancelling) {
     order.cancelledAt = new Date();
+    restoredProducts = await restoreCancelledOrderStock(order);
     if (refundStatus === undefined) {
       order.refundStatus =
         order.paymentMethod === "card" ? "pending" : "not_required";
@@ -511,6 +586,10 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
   await order.save();
   await populateOrderRelations(order);
   emitOrderEvent(req, "order:updated", order);
+  restoredProducts.forEach(({ product, previousStock, quantity }) => {
+    emitStockAlert(req, product, previousStock);
+    emitStockRestoredEvent(req, product, quantity);
+  });
   res.json(order);
 });
 export const assignRider = asyncHandler(async (req, res) => {

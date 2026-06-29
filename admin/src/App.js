@@ -449,7 +449,19 @@ function App() {
     );
   }, [notify, setProducts]);
 
-  const realtimeConnected = useOrderNotifications(session?.token, handleOrderCreated, handleOrderUpdated, handleStockAlert);
+  const handleStockRestored = useCallback(({ product, quantity }) => {
+    if (!product?._id) return;
+    setProducts((current) => current.map((entry) => entry._id === product._id ? { ...entry, ...product } : entry));
+    notify(`${product.name} stock restored by ${quantity}. Current stock ${product.stock}.`, "info");
+  }, [notify, setProducts]);
+
+  const realtimeConnected = useOrderNotifications(
+    session?.token,
+    handleOrderCreated,
+    handleOrderUpdated,
+    handleStockAlert,
+    handleStockRestored,
+  );
 
   useEffect(() => {
     if (!toast) return undefined;
@@ -706,8 +718,10 @@ function App() {
       isDeliveryEnabled: values.isDeliveryEnabled,
       deliveryFee: Number(values.deliveryFee || 0),
       freeDeliveryAbove: Number(values.freeDeliveryAbove || 0),
+      minimumOrder: Number(values.minimumOrder || 0),
       estimatedMinutes: Number(values.estimatedMinutes || 0),
       note: values.note.trim(),
+      branches: values.branches || [],
     };
     setBusyAction("delivery-settings-save");
     try {

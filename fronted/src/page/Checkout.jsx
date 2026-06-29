@@ -70,6 +70,13 @@ const addressToForm = (address = {}, fallback = {}) => ({
   area: address.area || "",
   instructions: address.instructions || "",
 });
+const quotePayload = (couponCode = "", address = {}) => ({
+  couponCode,
+  deliveryAddress: {
+    city: address.city || "Karachi",
+    area: address.area || "",
+  },
+});
 const SummarySkeleton = () => (
   <div className="space-y-3">
     {[0, 1, 2].map((item) => (
@@ -105,6 +112,7 @@ export default function Checkout() {
   const [status, setStatus] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [couponCode, setCouponCode] = useState("");
+  const [activeCouponCode, setActiveCouponCode] = useState("");
   const [discountQuote, setDiscountQuote] = useState(null);
   const [couponMessage, setCouponMessage] = useState("");
   const [applyingCoupon, setApplyingCoupon] = useState(false);
@@ -124,7 +132,7 @@ export default function Checkout() {
       const [cartResult, quoteResult, couponResult, profileResult] =
         await Promise.allSettled([
         api.get("/cart"),
-        api.post("/offers/quote", { couponCode: "" }),
+        api.post("/offers/quote", quotePayload("", initialForm)),
         api.get("/coupons/availability"),
         api.get("/auth/me"),
       ]);
@@ -180,6 +188,21 @@ export default function Checkout() {
       return;
     }
   }, [cart, cartLoading]);
+  useEffect(() => {
+    if (cartLoading || !cart?.items?.length) return undefined;
+    const timer = window.setTimeout(() => {
+      setQuoteLoading(true);
+      api
+        .post(
+          "/offers/quote",
+          quotePayload(activeCouponCode, { area: form.area, city: form.city }),
+        )
+        .then(({ data }) => setDiscountQuote(data))
+        .catch(() => setDiscountQuote(null))
+        .finally(() => setQuoteLoading(false));
+    }, 450);
+    return () => window.clearTimeout(timer);
+  }, [activeCouponCode, cart?.items?.length, cartLoading, form.area, form.city]);
   if (!localStorage.getItem("harmain_token"))
     return <Navigate to="/login" replace />;
   const items = cart?.items || [];
@@ -197,12 +220,19 @@ export default function Checkout() {
   );
   const delivery = discountQuote?.delivery || null;
   const deliveryFee = Number(discountQuote?.deliveryFee ?? delivery?.deliveryFee ?? 0);
+  const minimumOrder = Number(delivery?.minimumOrder ?? MINIMUM_ORDER);
+  const minimumOrderRemaining = Number(
+    delivery?.minimumOrderRemaining ?? Math.max(0, minimumOrder - paidTotal),
+  );
   const grandTotal = Number(discountQuote?.grandTotal ?? Math.max(0, total - discount + deliveryFee));
   const activeOfferDetails =
     appliedDiscount?.details || [];
   const isCheckingSavings = quoteLoading && items.length > 0;
   const deliveryUnavailable = delivery?.isDeliveryEnabled === false;
-  const canPlaceOrder = paidTotal >= MINIMUM_ORDER && !deliveryUnavailable;
+  const canPlaceOrder =
+    paidTotal >= minimumOrder &&
+    !deliveryUnavailable &&
+    delivery?.isMinimumMet !== false;
   const update = (name) => (event) =>
     setForm({ ...form, [name]: event.target.value });
   const selectSavedAddress = (address) => {
@@ -242,9 +272,10 @@ export default function Checkout() {
     setQuoteLoading(true);
     setCouponMessage("");
     try {
-      const { data } = await api.post("/offers/quote", { couponCode: code });
+      const { data } = await api.post("/offers/quote", quotePayload(code, form));
       setDiscountQuote(data);
       setCouponCode(code);
+      setActiveCouponCode(code);
       const appliedItemDiscount = Number(data.applied?.itemDiscount || 0);
       const appliedExtraDiscount = Number(
         data.applied?.extraDiscount ?? data.applied?.discount ?? 0,
@@ -269,11 +300,12 @@ export default function Checkout() {
   };
   const removeCoupon = () => {
     setCouponCode("");
+    setActiveCouponCode("");
     setCouponMessage("");
     setShowCouponForm(false);
     setQuoteLoading(true);
     api
-      .post("/offers/quote", { couponCode: "" })
+      .post("/offers/quote", quotePayload("", form))
       .then(({ data }) => setDiscountQuote(data))
       .catch(() => setDiscountQuote(null))
       .finally(() => setQuoteLoading(false));
@@ -285,7 +317,7 @@ export default function Checkout() {
       return;
     }
     if (!canPlaceOrder) {
-      setStatus(`Minimum order amount is Rs. ${MINIMUM_ORDER}.`);
+      setStatus(`Minimum order amount is Rs. ${formatMoney(minimumOrder)}.`);
       return;
     }
     if (!validate()) return;
@@ -483,7 +515,7 @@ export default function Checkout() {
                 deliveryUnavailable
                   ? "Delivery is currently unavailable"
                   : !canPlaceOrder
-                    ? `Minimum order is Rs. ${MINIMUM_ORDER}`
+                    ? `Minimum order is Rs. ${formatMoney(minimumOrder)}`
                     : "Place order"
               }
               className="flex items-center justify-center w-full h-12 gap-2 text-sm font-extrabold text-white bg-red-700 shadow-lg mt-7 rounded-xl shadow-red-700/20 disabled:opacity-60"
@@ -723,16 +755,32 @@ export default function Checkout() {
                       Add Rs. {formatMoney(delivery.freeDeliveryRemaining)} more for free delivery.
                     </small>
                   )}
+                  {minimumOrderRemaining > 0 && (
+                    <small className="mt-1 block text-xs text-red-700">
+                      Add Rs. {formatMoney(minimumOrderRemaining)} more to meet the minimum order for this area.
+                    </small>
+                  )}
+                  {(delivery.selectedBranch || delivery.selectedZone) && (
+                    <small className="mt-1 block text-xs text-gray-400">
+                      {delivery.selectedBranch?.name || "Branch"}
+                      {delivery.selectedZone?.name ? ` - ${delivery.selectedZone.name}` : ""}
+                    </small>
+                  )}
                   {delivery.estimatedMinutes > 0 && (
                     <small className="mt-1 block text-xs text-gray-400">
                       Estimated delivery: {delivery.estimatedMinutes} minutes
+                    </small>
+                  )}
+                  {delivery.message && (
+                    <small className="mt-1 block text-xs text-gray-500">
+                      {delivery.message}
                     </small>
                   )}
                 </div>
               )}
               {!cartLoading && !isCheckingSavings && deliveryUnavailable && (
                 <div className="rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
-                  Delivery is currently unavailable.
+                  {delivery?.message || "Delivery is currently unavailable."}
                 </div>
               )}
             </div>
