@@ -5,6 +5,7 @@ import {
   getMyOrders,
   getOrderById,
   getOrders,
+  markOrderRead,
   updateOrderStatus,
 } from "../controllers/orderController.js";
 import { authorize, protect } from "../middleware/authMiddleware.js";
@@ -16,6 +17,7 @@ router.post("/checkout", checkout);
 router.get("/my", getMyOrders);
 router.get("/", authorize("admin"), requirePermission("orders:manage"), getOrders);
 router.patch("/:id/rider", authorize("admin"), requirePermission("orders:manage"), auditActivity("order.assign_rider", "order"), assignRider);
+router.patch("/:id/read", authorize("admin"), requirePermission("orders:manage"), markOrderRead);
 router.get("/:id", getOrderById);
 router.patch("/:id/status", authorize("admin"), requirePermission("orders:manage"), auditActivity("order.status_update", "order"), updateOrderStatus);
 export default router;

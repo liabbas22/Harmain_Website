@@ -34,7 +34,6 @@ import { clearAdminSession, readAdminSession, saveAdminSession } from "./utils/s
 const newOptionId = () => `${Date.now()}-${Math.random()}`;
 const newAddOnId = () => `${Date.now()}-${Math.random()}-addon`;
 const newComboItemId = () => `${Date.now()}-${Math.random()}-combo`;
-const unreadOrderStorageKey = (userId) => `harmain_admin_unread_orders_${userId}`;
 const hasPriceValue = (value) =>
   value !== "" && value !== null && value !== undefined && Number.isFinite(Number(value)) && Number(value) >= 0;
 
@@ -258,12 +257,19 @@ function App() {
   const [orderDetails, setOrderDetails] = useState(null);
   const [busyAction, setBusyAction] = useState("");
   const [orderFilter, setOrderFilter] = useState("all");
+  const [orderPage, setOrderPage] = useState(1);
+  const [orderLimit, setOrderLimit] = useState(20);
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [filteredOrdersTotal, setFilteredOrdersTotal] = useState(0);
+  const [orderPagination, setOrderPagination] = useState({
+    page: 1,
+    limit: 20,
+    total: 0,
+    pages: 1,
+  });
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [ordersError, setOrdersError] = useState("");
   const [unreadOrderIds, setUnreadOrderIds] = useState(() => new Set());
-  const [unreadOrdersOwner, setUnreadOrdersOwner] = useState(null);
   const [coupons, setCoupons] = useState([]);
   const [couponsLoading, setCouponsLoading] = useState(false);
   const [offers, setOffers] = useState([]);
@@ -312,8 +318,13 @@ function App() {
     setConfirmation(null);
     setCancelEditor(null);
     setOrderDetails(null);
+    setOrderFilter("all");
+    setOrderPage(1);
+    setOrderLimit(20);
+    setOrderPagination({ page: 1, limit: 20, total: 0, pages: 1 });
+    setFilteredOrders([]);
+    setFilteredOrdersTotal(0);
     setUnreadOrderIds(new Set());
-    setUnreadOrdersOwner(null);
     setCoupons([]);
     setOffers([]);
     setBanners([]);
@@ -368,7 +379,13 @@ function App() {
     [updateSession],
   );
 
-  const workspace = useAdminWorkspace(session?.token, logout, syncAdminProfile);
+  const syncUnreadOrders = useCallback((ids = []) => {
+    setUnreadOrderIds(
+      new Set(Array.isArray(ids) ? ids.filter((id) => typeof id === "string") : []),
+    );
+  }, []);
+
+  const workspace = useAdminWorkspace(session?.token, logout, syncAdminProfile, syncUnreadOrders);
   const { products, categories, orders, riders, setProducts, setOrders, loading, error, load, refreshOverview } = workspace;
 
   const loadCoupons = useCallback(async () => {
@@ -572,21 +589,38 @@ function App() {
     return () => window.clearInterval(interval);
   }, [loadReports, view]);
 
-  const loadFilteredOrders = useCallback(async (filter) => {
+  const loadFilteredOrders = useCallback(async (filter, page = orderPage, limit = orderLimit) => {
     if (!session?.token) return;
     if (!can("orders:manage")) {
       setFilteredOrders([]);
       setFilteredOrdersTotal(0);
+      setOrderPagination({ page: 1, limit, total: 0, pages: 1 });
       return;
     }
     const requestId = ++orderRequestRef.current;
     setOrdersLoading(true);
     setOrdersError("");
     try {
-      const result = await adminApi.getOrders(session.token, filter);
+      const result = await adminApi.getOrders(session.token, {
+        filter,
+        page,
+        limit,
+      });
       if (requestId !== orderRequestRef.current) return;
+      const pagination = {
+        page: result.pagination?.page || page,
+        limit: result.pagination?.limit || limit,
+        total: result.pagination?.total || 0,
+        pages: result.pagination?.pages || 1,
+      };
+      if (pagination.total > 0 && page > pagination.pages) {
+        setOrderPage(pagination.pages);
+        return;
+      }
       setFilteredOrders(result.orders || []);
-      setFilteredOrdersTotal(result.pagination?.total || 0);
+      setFilteredOrdersTotal(pagination.total);
+      setOrderPagination(pagination);
+      syncUnreadOrders(result.unreadOrderIds || []);
     } catch (requestError) {
       if (requestId !== orderRequestRef.current) return;
       if (requestError.status === 401 || requestError.status === 403) logout();
@@ -594,23 +628,24 @@ function App() {
     } finally {
       if (requestId === orderRequestRef.current) setOrdersLoading(false);
     }
-  }, [can, logout, session?.token]);
+  }, [can, logout, orderLimit, orderPage, session?.token, syncUnreadOrders]);
 
   const handleOrderCreated = useCallback((order) => {
     if (!order?._id) return;
+    if (!can("orders:manage")) return;
     setOrders((current) => [order, ...current.filter((entry) => entry._id !== order._id)].slice(0, 100));
-    if (view === "orders") loadFilteredOrders(orderFilter);
+    if (view === "orders") loadFilteredOrders(orderFilter, orderPage, orderLimit);
     setUnreadOrderIds((current) => new Set(current).add(order._id));
     notify(`New order ${shortId(order._id)} received.`, "info");
-  }, [loadFilteredOrders, notify, orderFilter, setOrders, view]);
+  }, [can, loadFilteredOrders, notify, orderFilter, orderLimit, orderPage, setOrders, view]);
 
   const handleOrderUpdated = useCallback((order) => {
     if (!order?._id) return;
     const applyUpdate = (current) => current._id === order._id ? { ...current, ...order } : current;
     setOrders((current) => current.map(applyUpdate));
     setOrderDetails((current) => current?._id === order._id ? { ...current, ...order } : current);
-    if (view === "orders") loadFilteredOrders(orderFilter);
-  }, [loadFilteredOrders, orderFilter, setOrders, view]);
+    if (view === "orders") loadFilteredOrders(orderFilter, orderPage, orderLimit);
+  }, [loadFilteredOrders, orderFilter, orderLimit, orderPage, setOrders, view]);
 
   const handleStockAlert = useCallback(({ product, kind }) => {
     if (!product?._id) return;
@@ -643,28 +678,6 @@ function App() {
     const timer = window.setTimeout(() => setToast(null), attentionToast ? 8000 : 3500);
     return () => window.clearTimeout(timer);
   }, [toast]);
-
-  useEffect(() => {
-    const userId = session?.user?.id;
-    if (!userId) {
-      setUnreadOrderIds(new Set());
-      setUnreadOrdersOwner(null);
-      return;
-    }
-    try {
-      const savedIds = JSON.parse(localStorage.getItem(unreadOrderStorageKey(userId)) || "[]");
-      setUnreadOrderIds(new Set(Array.isArray(savedIds) ? savedIds.filter((id) => typeof id === "string") : []));
-    } catch {
-      setUnreadOrderIds(new Set());
-    }
-    setUnreadOrdersOwner(userId);
-  }, [session?.user?.id]);
-
-  useEffect(() => {
-    const userId = session?.user?.id;
-    if (!userId || unreadOrdersOwner !== userId) return;
-    localStorage.setItem(unreadOrderStorageKey(userId), JSON.stringify([...unreadOrderIds]));
-  }, [session?.user?.id, unreadOrderIds, unreadOrdersOwner]);
 
   useEffect(() => {
     if (view !== "overview" || orderDetails) return undefined;
@@ -741,14 +754,21 @@ function App() {
     }
   }, [session?.user, view]);
 
-  const markOrderRead = useCallback((orderId) => {
+  const markOrderRead = useCallback(async (orderId) => {
     setUnreadOrderIds((current) => {
       if (!current.has(orderId)) return current;
       const next = new Set(current);
       next.delete(orderId);
       return next;
     });
-  }, []);
+    if (!session?.token) return;
+    try {
+      const result = await adminApi.markOrderRead(orderId, session.token);
+      syncUnreadOrders(result.unreadOrderIds || []);
+    } catch (requestError) {
+      notify(requestError.message || "Order read status could not be updated.", "error");
+    }
+  }, [notify, session?.token, syncUnreadOrders]);
 
   const metrics = useMemo(() => ({
     revenue: orders.filter((order) => order.orderStatus !== "cancelled").reduce((sum, order) => sum + Number(order.total || 0), 0),
@@ -1031,7 +1051,7 @@ function App() {
       setOrders((current) => current.map(applyUpdate));
       setFilteredOrders((current) => current.map(applyUpdate));
       setOrderDetails((current) => current?._id === orderId ? { ...current, ...updated } : current);
-      if (view === "orders") await loadFilteredOrders(orderFilter);
+      if (view === "orders") await loadFilteredOrders(orderFilter, orderPage, orderLimit);
       notify("Order updated.");
       return true;
     } catch (requestError) {
@@ -1246,6 +1266,16 @@ function App() {
     }
   };
 
+  const changeOrderFilter = (nextFilter) => {
+    setOrderFilter(nextFilter);
+    setOrderPage(1);
+  };
+
+  const changeOrderLimit = (nextLimit) => {
+    setOrderLimit(Number(nextLimit) || 20);
+    setOrderPage(1);
+  };
+
   if (!session) return <LoginScreen onLogin={setSession} />;
 
   const requestDelete = (entity, record) => setConfirmation({
@@ -1256,7 +1286,7 @@ function App() {
   });
 
   const viewLoading = view === "orders" ? ordersLoading : view === "coupons" ? couponsLoading : view === "offers" ? offersLoading : view === "banners" ? bannersLoading : view === "feedback" ? feedbackLoading : view === "customers" ? customersLoading : view === "delivery" ? deliverySettingsLoading : view === "reports" ? reportsLoading : view === "security" ? securityLoading : loading;
-  const refreshView = view === "orders" ? () => loadFilteredOrders(orderFilter) : view === "coupons" ? loadCoupons : view === "offers" ? loadOffers : view === "banners" ? loadBanners : view === "feedback" ? loadFeedback : view === "customers" ? loadCustomers : view === "delivery" ? loadDeliverySettings : view === "reports" ? loadReports : view === "security" ? loadSecurity : load;
+  const refreshView = view === "orders" ? () => loadFilteredOrders(orderFilter, orderPage, orderLimit) : view === "coupons" ? loadCoupons : view === "offers" ? loadOffers : view === "banners" ? loadBanners : view === "feedback" ? loadFeedback : view === "customers" ? loadCustomers : view === "delivery" ? loadDeliverySettings : view === "reports" ? loadReports : view === "security" ? loadSecurity : load;
 
   return (
     <>
@@ -1265,7 +1295,7 @@ function App() {
         {view === "overview" && <OverviewPage metrics={metrics} orders={orders} products={products} unreadOrderIds={unreadOrderIds} onMarkOrderRead={markOrderRead} onNavigate={setView} onOpenOrder={setOrderDetails} />}
         {view === "products" && <ProductsPage products={filteredProducts} categories={categories} query={productQuery} categoryFilter={categoryFilter} onQueryChange={setProductQuery} onCategoryFilterChange={setCategoryFilter} onNew={() => setProductEditor({ id: null, values: { ...emptyProduct(categories[0]?._id || ""), options: [{ clientId: newOptionId(), name: "Regular", actualPrice: "", discountPrice: "", tag: "" }] } })} onEdit={(product) => setProductEditor(toProductEditor(product))} onDelete={(product) => requestDelete("product", product)} onExport={exportProducts} onImport={importProducts} busyAction={busyAction} />}
         {view === "categories" && <CategoriesPage categories={categories} products={products} onNew={() => setCategoryEditor({ id: null, values: emptyCategory })} onEdit={(category) => setCategoryEditor({ id: category._id, values: { ...emptyCategory, ...category } })} onDelete={(category) => requestDelete("category", category)} busyAction={busyAction} />}
-        {view === "orders" && <OrdersPage orders={filteredOrders} total={filteredOrdersTotal} filter={orderFilter} unreadOrderIds={unreadOrderIds} onMarkOrderRead={markOrderRead} onFilterChange={setOrderFilter} onUpdate={updateOrder} onCancel={(order) => setCancelEditor({ order })} onOpenOrder={setOrderDetails} busyAction={busyAction} loading={ordersLoading} error={ordersError} />}
+        {view === "orders" && <OrdersPage orders={filteredOrders} total={filteredOrdersTotal} pagination={orderPagination} page={orderPage} limit={orderLimit} filter={orderFilter} unreadOrderIds={unreadOrderIds} onMarkOrderRead={markOrderRead} onFilterChange={changeOrderFilter} onPageChange={setOrderPage} onLimitChange={changeOrderLimit} onUpdate={updateOrder} onCancel={(order) => setCancelEditor({ order })} onOpenOrder={setOrderDetails} busyAction={busyAction} loading={ordersLoading} error={ordersError} />}
         {view === "reports" && <ReportsPage report={report} range={reportRange} onRangeChange={setReportRange} loading={reportsLoading} error={reportsError} />}
         {view === "customers" && <CustomersPage customers={customers} total={customersTotal} search={customerSearch} status={customerStatus} loading={customersLoading} error={customersError} selectedDetail={customerDetail} detailLoading={customerDetailLoading} busyAction={busyAction} onSearchChange={setCustomerSearch} onStatusChange={setCustomerStatus} onOpenCustomer={openCustomer} onCloseCustomer={() => setCustomerDetail(null)} onSaveLoyalty={saveCustomerLoyalty} onAddNote={addCustomerNote} onDeleteNote={deleteCustomerNote} onToggleBlock={toggleCustomerBlock} />}
         {view === "coupons" && <CouponsPage coupons={coupons} onNew={() => setCouponEditor({ id: null, values: { ...emptyCoupon, startsAt: toDateTimeInput(new Date()) } })} onEdit={(coupon) => setCouponEditor(toCouponEditor(coupon))} onDelete={(coupon) => requestDelete("coupon", coupon)} busyAction={busyAction} />}

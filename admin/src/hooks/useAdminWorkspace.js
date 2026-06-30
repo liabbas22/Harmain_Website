@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { adminApi } from "../api/adminApi";
 import { hasAdminPermission } from "../constants/admin";
 
-export function useAdminWorkspace(token, onUnauthorized, onProfile) {
+export function useAdminWorkspace(token, onUnauthorized, onProfile, onUnreadOrders) {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -38,13 +38,14 @@ export function useAdminWorkspace(token, onUnauthorized, onProfile) {
       setCategories(categoryResult || []);
       setOrders(orderResult.orders || []);
       setRiders(riderResult || []);
+      onUnreadOrders?.(orderResult.unreadOrderIds || []);
     } catch (requestError) {
       if (requestError.status === 401 || requestError.status === 403) onUnauthorized();
       else setError(requestError.message || "Could not load the admin workspace.");
     } finally {
       setLoading(false);
     }
-  }, [onProfile, onUnauthorized, token]);
+  }, [onProfile, onUnauthorized, onUnreadOrders, token]);
 
   useEffect(() => {
     load();
@@ -61,13 +62,14 @@ export function useAdminWorkspace(token, onUnauthorized, onProfile) {
       ]);
       setProducts(productResult.products || []);
       setOrders(orderResult.orders || []);
+      onUnreadOrders?.(orderResult.unreadOrderIds || []);
     } catch (requestError) {
       if (requestError.status === 401 || requestError.status === 403) onUnauthorized();
       else setError(requestError.message || "Could not refresh overview data.");
     } finally {
       overviewRefreshingRef.current = false;
     }
-  }, [onUnauthorized, token]);
+  }, [onUnauthorized, onUnreadOrders, token]);
 
   return {
     products,

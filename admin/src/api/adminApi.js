@@ -36,7 +36,16 @@ export const adminApi = {
     request(`/auth/admin/activity?limit=${encodeURIComponent(limit)}`, { token }),
   getProducts: (token) => request("/products?limit=100", { token }),
   getCategories: (token) => request("/categories?all=true", { token }),
-  getOrders: (token, filter = "all") => request(`/orders?limit=100&filter=${encodeURIComponent(filter)}`, { token }),
+  getOrders: (token, options = {}) => {
+    const params =
+      typeof options === "string"
+        ? { filter: options }
+        : { filter: "all", page: 1, limit: 20, ...options };
+    return request(
+      `/orders?filter=${encodeURIComponent(params.filter || "all")}&page=${encodeURIComponent(params.page || 1)}&limit=${encodeURIComponent(params.limit || 20)}`,
+      { token },
+    );
+  },
   getReports: (token, range = "month") => request(`/reports?range=${encodeURIComponent(range)}`, { token }),
   getRiders: (token) => request("/auth/admin/riders", { token }),
   getCoupons: (token) => request("/coupons", { token }),
@@ -113,6 +122,8 @@ export const adminApi = {
     request(`/categories/${id}`, { method: "DELETE", token }),
   updateOrder: (id, body, token) =>
     request(`/orders/${id}/status`, { method: "PATCH", body, token }),
+  markOrderRead: (id, token) =>
+    request(`/orders/${id}/read`, { method: "PATCH", token }),
   assignRider: (id, riderId, token) =>
     request(`/orders/${id}/rider`, { method: "PATCH", body: { riderId: riderId || null }, token }),
 };

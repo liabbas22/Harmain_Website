@@ -2,9 +2,11 @@ import mongoose from "mongoose";
 import Cart from "../models/Cart.js";
 import Coupon from "../models/Coupon.js";
 import Order from "../models/Order.js";
+import OrderNotification from "../models/OrderNotification.js";
 import Product from "../models/Product.js";
 import User from "../models/User.js";
 import asyncHandler from "../utils/asyncHandler.js";
+import { hasAdminPermission } from "../utils/adminSecurity.js";
 import { claimCouponUsage } from "../utils/couponService.js";
 import { calculateDeliveryCharge } from "../utils/deliverySettingsService.js";
 import { couponSnapshot, loyaltySnapshot, offerBreakdownSnapshot, offerSnapshot, selectBestDiscount } from "../utils/offerService.js";
@@ -159,6 +161,40 @@ const emitOrderEvent = (req, event, order) =>
     .get("io")
     ?.to("admin-orders")
     .emit(event, { order: order.toObject() });
+const unreadOrderIdsForAdmin = async (adminId) => {
+  const notifications = await OrderNotification.find({
+    admin: adminId,
+    isRead: false,
+  })
+    .select("order")
+    .sort({ createdAt: -1 })
+    .lean();
+  return notifications
+    .map((notification) => notification.order?.toString())
+    .filter(Boolean);
+};
+const orderPayloadWithReadState = (order, unreadSet) => {
+  const payload = order.toObject ? order.toObject() : order;
+  return {
+    ...payload,
+    isUnread: unreadSet.has(payload._id.toString()),
+  };
+};
+const createOrderNotifications = async (order) => {
+  const admins = await User.find({
+    role: "admin",
+    isActive: { $ne: false },
+  }).select("_id role adminRole permissions isActive");
+  const docs = admins
+    .filter((admin) => hasAdminPermission(admin, "orders:manage"))
+    .map((admin) => ({ admin: admin._id, order: order._id }));
+  if (!docs.length) return;
+  try {
+    await OrderNotification.insertMany(docs, { ordered: false });
+  } catch (error) {
+    console.error("Order notifications could not be created", error.message);
+  }
+};
 const comboItemSnapshots = (product) =>
   product?.isComboMeal
     ? (product.comboItems || [])
@@ -428,6 +464,7 @@ export const checkout = asyncHandler(async (req, res) => {
     });
   }
   await order.populate("user", "name email");
+  await createOrderNotifications(order);
   emitOrderEvent(req, "order:created", order);
   updatedProducts.forEach((product, index) =>
     emitStockAlert(req, product, requestedProducts[index].product.stock),
@@ -454,7 +491,7 @@ export const getOrders = asyncHandler(async (req, res) => {
   if (!filter) return res.status(400).json({ message: "Invalid order filter" });
   const currentPage = Math.max(Number(page), 1);
   const pageSize = Math.min(Math.max(Number(limit), 1), 100);
-  const [orders, total] = await Promise.all([
+  const [orders, total, unreadOrderIds] = await Promise.all([
     withOrderRelations(
       Order.find(filter)
         .sort({ createdAt: -1 })
@@ -462,10 +499,19 @@ export const getOrders = asyncHandler(async (req, res) => {
         .limit(pageSize),
     ),
     Order.countDocuments(filter),
+    unreadOrderIdsForAdmin(req.user._id),
   ]);
+  const unreadSet = new Set(unreadOrderIds);
   res.json({
-    orders,
-    pagination: { page: currentPage, limit: pageSize, total },
+    orders: orders.map((order) => orderPayloadWithReadState(order, unreadSet)),
+    pagination: {
+      page: currentPage,
+      limit: pageSize,
+      total,
+      pages: Math.max(1, Math.ceil(total / pageSize)),
+    },
+    unreadOrderIds,
+    unreadCount: unreadOrderIds.length,
   });
 });
 export const updateOrderStatus = asyncHandler(async (req, res) => {
@@ -591,6 +637,23 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
     emitStockRestoredEvent(req, product, quantity);
   });
   res.json(order);
+});
+export const markOrderRead = asyncHandler(async (req, res) => {
+  const order = await Order.findById(req.params.id).select("_id");
+  if (!order) return res.status(404).json({ message: "Order not found" });
+
+  await OrderNotification.findOneAndUpdate(
+    { admin: req.user._id, order: order._id },
+    { $set: { isRead: true, readAt: new Date() } },
+    { new: true },
+  );
+  const unreadOrderIds = await unreadOrderIdsForAdmin(req.user._id);
+
+  res.json({
+    orderId: order._id,
+    unreadOrderIds,
+    unreadCount: unreadOrderIds.length,
+  });
 });
 export const assignRider = asyncHandler(async (req, res) => {
   if (!Object.prototype.hasOwnProperty.call(req.body, "riderId"))
