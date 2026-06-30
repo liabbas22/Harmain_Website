@@ -10,6 +10,8 @@ export const ADMIN_PERMISSION_LABELS = {
   "delivery:manage": "Delivery branches and zones",
   "reports:read": "Sales reports",
   "riders:manage": "Delivery team",
+  "content:manage": "Hero banners",
+  "feedback:manage": "Complaint and feedback",
   "security:manage": "Admin security",
 };
 

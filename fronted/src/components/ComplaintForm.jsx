@@ -1,29 +1,59 @@
-
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { FiMessageSquare } from "react-icons/fi";
-import { FaUser, FaPhoneAlt } from "react-icons/fa";
+import { FaPhoneAlt, FaUser } from "react-icons/fa";
 import { MdEmail, MdRestaurantMenu } from "react-icons/md";
+import api, { apiError } from "../api";
+
+const initialForm = {
+  name: "",
+  phone: "",
+  email: "",
+  branch: "",
+  complaint: "",
+};
 
 const ComplaintForm = () => {
-  const [formData, setFormData] = useState({
-    name: "",
-    phone: "",
-    email: "",
-    branch: "",
-    complaint: "",
-  });
+  const [formData, setFormData] = useState(initialForm);
+  const [submitting, setSubmitting] = useState(false);
+  const [success, setSuccess] = useState("");
+  const [error, setError] = useState("");
 
-  const handleChange = (e) => {
+  const handleChange = (event) => {
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value,
+      [event.target.name]: event.target.value,
     });
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    console.log(formData);
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setSuccess("");
+    setError("");
+
+    if (formData.complaint.trim().length < 10) {
+      setError("Please write complete complaint details.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await api.post("/feedback", {
+        name: formData.name,
+        phone: formData.phone,
+        email: formData.email,
+        branch: formData.branch,
+        type: "complaint",
+        subject: "Website complaint",
+        message: formData.complaint,
+      });
+      setSuccess("Your complaint has been submitted. Our team will contact you shortly.");
+      setFormData(initialForm);
+    } catch (requestError) {
+      setError(apiError(requestError));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -73,6 +103,7 @@ const ComplaintForm = () => {
                     onChange={handleChange}
                     placeholder="Enter your full name"
                     className="w-full py-4 outline-none"
+                    required
                   />
                 </div>
               </div>
@@ -92,6 +123,7 @@ const ComplaintForm = () => {
                     onChange={handleChange}
                     placeholder="Enter phone number"
                     className="w-full py-4 outline-none"
+                    required
                   />
                 </div>
               </div>
@@ -132,11 +164,10 @@ const ComplaintForm = () => {
                     className="w-full py-4 bg-transparent outline-none"
                   >
                     <option value="">Select Branch</option>
+                    <option value="Harmain Makli">Harmain Makli</option>
                     <option value="Bahadurabad">Bahadurabad</option>
                     <option value="Gulshan">Gulshan</option>
-                    <option value="North Nazimabad">
-                      North Nazimabad
-                    </option>
+                    <option value="North Nazimabad">North Nazimabad</option>
                   </select>
                 </div>
               </div>
@@ -156,17 +187,31 @@ const ComplaintForm = () => {
                   onChange={handleChange}
                   placeholder="Write your complaint here..."
                   className="w-full h-40 py-4 bg-transparent outline-none resize-none"
-                ></textarea>
+                  required
+                />
               </div>
             </div>
 
+            {error && (
+              <div className="px-4 py-3 text-sm font-bold text-red-700 bg-red-50 border border-red-100 rounded-2xl">
+                {error}
+              </div>
+            )}
+
+            {success && (
+              <div className="px-4 py-3 text-sm font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-2xl">
+                {success}
+              </div>
+            )}
+
             <button
               type="submit"
-              className="flex items-center justify-center w-full gap-3 px-6 py-4 text-lg font-bold text-white transition-all duration-300 bg-red-700 shadow-xl rounded-2xl hover:bg-red-600 hover:scale-[1.01]"
+              disabled={submitting}
+              className="flex items-center justify-center w-full gap-3 px-6 py-4 text-lg font-bold text-white transition-all duration-300 bg-red-700 shadow-xl rounded-2xl hover:bg-red-600 hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-70"
             >
-              Submit Complaint
+              {submitting ? "Submitting..." : "Submit Complaint"}
               <span className="transition-all duration-200 group-hover:translate-x-1">
-                →
+                -&gt;
               </span>
             </button>
           </form>
@@ -177,4 +222,3 @@ const ComplaintForm = () => {
 };
 
 export default ComplaintForm;
-

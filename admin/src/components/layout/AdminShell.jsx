@@ -36,7 +36,7 @@ export default function AdminShell({
           </span>
         </div>
         <nav
-          className="flex gap-1 overflow-x-auto lg:grid"
+          className="flex gap-1 overflow-x-auto lg:min-h-0 lg:flex-1 lg:auto-rows-max lg:grid lg:overflow-x-hidden lg:overflow-y-auto lg:pr-1"
           aria-label="Admin navigation"
         >
           {allowedNavigation.map(([id, label]) => (

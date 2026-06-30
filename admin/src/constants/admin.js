@@ -16,6 +16,8 @@ export const ADMIN_PERMISSION_LABELS = {
   "delivery:manage": "Delivery branches and zones",
   "reports:read": "Sales reports",
   "riders:manage": "Delivery team",
+  "content:manage": "Hero banners",
+  "feedback:manage": "Complaint and feedback",
   "security:manage": "Admin security",
 };
 
@@ -79,6 +81,8 @@ export const navigationItems = [
   ["customers", "Customers", "customers:manage"],
   ["coupons", "Coupons", "offers:manage"],
   ["offers", "Offers", "offers:manage"],
+  ["banners", "Hero banners", "content:manage"],
+  ["feedback", "Feedback", "feedback:manage"],
   ["delivery", "Delivery settings", "delivery:manage"],
   ["riders", "Delivery team", "riders:manage"],
   ["security", "Security"],
@@ -166,4 +170,31 @@ export const emptyOffer = {
   startsAt: "",
   expiresAt: "",
   isActive: true,
+};
+
+export const FEEDBACK_STATUSES = [
+  ["new", "New"],
+  ["in_review", "In review"],
+  ["resolved", "Resolved"],
+  ["closed", "Closed"],
+];
+
+export const FEEDBACK_PRIORITIES = [
+  ["low", "Low"],
+  ["normal", "Normal"],
+  ["high", "High"],
+  ["urgent", "Urgent"],
+];
+
+export const emptyBanner = {
+  title: "",
+  subtitle: "",
+  badge: "",
+  image: "",
+  ctaLabel: "",
+  ctaLink: "",
+  displayOrder: "0",
+  isActive: true,
+  startsAt: "",
+  endsAt: "",
 };

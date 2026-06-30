@@ -8,9 +8,11 @@ import Toast from "./components/ui/Toast";
 import LoginScreen from "./features/auth/LoginScreen";
 import CategoriesPage from "./features/categories/CategoriesPage";
 import CategoryEditor from "./features/categories/CategoryEditor";
+import HeroBannersPage from "./features/banners/HeroBannersPage";
 import CouponEditor from "./features/coupons/CouponEditor";
 import CouponsPage from "./features/coupons/CouponsPage";
 import CustomersPage from "./features/customers/CustomersPage";
+import FeedbackPage from "./features/feedback/FeedbackPage";
 import OfferEditor from "./features/offers/OfferEditor";
 import OffersPage from "./features/offers/OffersPage";
 import OverviewPage from "./features/dashboard/OverviewPage";
@@ -226,6 +228,19 @@ const createOfferPayload = (values) => ({
   expiresAt: values.expiresAt ? new Date(values.expiresAt).toISOString() : null,
 });
 
+const createBannerPayload = (values) => ({
+  title: values.title.trim(),
+  subtitle: values.subtitle.trim(),
+  badge: values.badge.trim(),
+  image: values.image.trim(),
+  ctaLabel: values.ctaLabel.trim(),
+  ctaLink: values.ctaLink.trim(),
+  displayOrder: Number(values.displayOrder || 0),
+  isActive: values.isActive !== false,
+  startsAt: values.startsAt ? new Date(values.startsAt).toISOString() : null,
+  endsAt: values.endsAt ? new Date(values.endsAt).toISOString() : null,
+});
+
 function App() {
   const [session, setSession] = useState(readAdminSession);
   const [view, setView] = useState("overview");
@@ -253,6 +268,18 @@ function App() {
   const [couponsLoading, setCouponsLoading] = useState(false);
   const [offers, setOffers] = useState([]);
   const [offersLoading, setOffersLoading] = useState(false);
+  const [banners, setBanners] = useState([]);
+  const [bannersLoading, setBannersLoading] = useState(false);
+  const [feedback, setFeedback] = useState([]);
+  const [feedbackTotal, setFeedbackTotal] = useState(0);
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
+  const [feedbackError, setFeedbackError] = useState("");
+  const [feedbackFilters, setFeedbackFilters] = useState({
+    status: "all",
+    type: "all",
+    priority: "all",
+    search: "",
+  });
   const [customers, setCustomers] = useState([]);
   const [customersTotal, setCustomersTotal] = useState(0);
   const [customersLoading, setCustomersLoading] = useState(false);
@@ -289,6 +316,16 @@ function App() {
     setUnreadOrdersOwner(null);
     setCoupons([]);
     setOffers([]);
+    setBanners([]);
+    setFeedback([]);
+    setFeedbackTotal(0);
+    setFeedbackError("");
+    setFeedbackFilters({
+      status: "all",
+      type: "all",
+      priority: "all",
+      search: "",
+    });
     setCustomers([]);
     setCustomersTotal(0);
     setCustomersError("");
@@ -375,6 +412,55 @@ function App() {
   useEffect(() => {
     loadOffers();
   }, [loadOffers]);
+
+  const loadBanners = useCallback(async () => {
+    if (!session?.token) return;
+    if (!can("content:manage")) {
+      setBanners([]);
+      return;
+    }
+    setBannersLoading(true);
+    try {
+      const result = await adminApi.getBanners(session.token);
+      setBanners(result.banners || []);
+    } catch (requestError) {
+      if (requestError.status === 401 || requestError.status === 403) logout();
+      else notify(requestError.message || "Could not load hero banners.", "error");
+    } finally {
+      setBannersLoading(false);
+    }
+  }, [can, logout, notify, session?.token]);
+
+  useEffect(() => {
+    if (view === "banners") loadBanners();
+  }, [loadBanners, view]);
+
+  const loadFeedback = useCallback(async () => {
+    if (!session?.token) return;
+    if (!can("feedback:manage")) {
+      setFeedback([]);
+      setFeedbackTotal(0);
+      return;
+    }
+    setFeedbackLoading(true);
+    setFeedbackError("");
+    try {
+      const result = await adminApi.getFeedback(session.token, feedbackFilters);
+      setFeedback(result.feedback || []);
+      setFeedbackTotal(result.pagination?.total || 0);
+    } catch (requestError) {
+      if (requestError.status === 401 || requestError.status === 403) logout();
+      else setFeedbackError(requestError.message || "Could not load feedback.");
+    } finally {
+      setFeedbackLoading(false);
+    }
+  }, [can, feedbackFilters, logout, session?.token]);
+
+  useEffect(() => {
+    if (view !== "feedback") return undefined;
+    const timer = window.setTimeout(loadFeedback, 250);
+    return () => window.clearTimeout(timer);
+  }, [loadFeedback, view]);
 
   const loadCustomers = useCallback(async () => {
     if (!session?.token) return;
@@ -808,6 +894,47 @@ function App() {
     }
   };
 
+  const saveBanner = async (id, values) => {
+    const payload = createBannerPayload(values);
+    if (!payload.image) {
+      notify("Banner image is required.", "error");
+      return false;
+    }
+    if (payload.startsAt && payload.endsAt && new Date(payload.startsAt) > new Date(payload.endsAt)) {
+      notify("Banner end date must be after start date.", "error");
+      return false;
+    }
+    setBusyAction("banner-save");
+    try {
+      await adminApi.saveBanner(id, payload, session.token);
+      notify(id ? "Hero banner updated." : "Hero banner created.");
+      await loadBanners();
+      return true;
+    } catch (requestError) {
+      notify(requestError.message || "Hero banner could not be saved.", "error");
+      return false;
+    } finally {
+      setBusyAction("");
+    }
+  };
+
+  const updateFeedback = async (feedbackId, values) => {
+    setBusyAction(`feedback-${feedbackId}`);
+    try {
+      const updated = await adminApi.updateFeedback(feedbackId, values, session.token);
+      setFeedback((current) =>
+        current.map((entry) => entry._id === feedbackId ? { ...entry, ...updated } : entry),
+      );
+      notify("Feedback updated.");
+      return true;
+    } catch (requestError) {
+      notify(requestError.message || "Feedback could not be updated.", "error");
+      return false;
+    } finally {
+      setBusyAction("");
+    }
+  };
+
   const saveDeliverySettings = async (values) => {
     const payload = {
       isDeliveryEnabled: values.isDeliveryEnabled,
@@ -876,15 +1003,18 @@ function App() {
     const isProduct = item.entity === "product";
     const isCoupon = item.entity === "coupon";
     const isOffer = item.entity === "offer";
+    const isBanner = item.entity === "banner";
     setBusyAction(`${item.entity}-${item.record._id}`);
     try {
       if (isProduct) await adminApi.deleteProduct(item.record._id, session.token);
       else if (isCoupon) await adminApi.deleteCoupon(item.record._id, session.token);
       else if (isOffer) await adminApi.deleteOffer(item.record._id, session.token);
+      else if (isBanner) await adminApi.deleteBanner(item.record._id, session.token);
       else await adminApi.deleteCategory(item.record._id, session.token);
-      notify(isProduct ? "Product deleted." : isCoupon ? "Coupon deleted." : isOffer ? "Offer deleted." : "Category deleted.");
+      notify(isProduct ? "Product deleted." : isCoupon ? "Coupon deleted." : isOffer ? "Offer deleted." : isBanner ? "Hero banner deleted." : "Category deleted.");
       if (isCoupon) await loadCoupons();
       else if (isOffer) await loadOffers();
+      else if (isBanner) await loadBanners();
       else await load();
     } catch (requestError) {
       notify(requestError.message || "Item could not be deleted.", "error");
@@ -1121,12 +1251,12 @@ function App() {
   const requestDelete = (entity, record) => setConfirmation({
     entity,
     record,
-    title: `Delete ${entity === "coupon" ? record.code : record.name}?`,
-    message: entity === "product" ? "This product will be permanently removed from the menu and cannot be recovered." : entity === "coupon" ? "This coupon will no longer be available at checkout. This action cannot be undone." : entity === "offer" ? "This automatic offer will no longer be available at checkout. This action cannot be undone." : "Delete this category only after its products have been reassigned. This action cannot be undone.",
+    title: `Delete ${entity === "coupon" ? record.code : record.name || record.title || "banner"}?`,
+    message: entity === "product" ? "This product will be permanently removed from the menu and cannot be recovered." : entity === "coupon" ? "This coupon will no longer be available at checkout. This action cannot be undone." : entity === "offer" ? "This automatic offer will no longer be available at checkout. This action cannot be undone." : entity === "banner" ? "This hero banner will be removed from the homepage slider. This action cannot be undone." : "Delete this category only after its products have been reassigned. This action cannot be undone.",
   });
 
-  const viewLoading = view === "orders" ? ordersLoading : view === "coupons" ? couponsLoading : view === "offers" ? offersLoading : view === "customers" ? customersLoading : view === "delivery" ? deliverySettingsLoading : view === "reports" ? reportsLoading : view === "security" ? securityLoading : loading;
-  const refreshView = view === "orders" ? () => loadFilteredOrders(orderFilter) : view === "coupons" ? loadCoupons : view === "offers" ? loadOffers : view === "customers" ? loadCustomers : view === "delivery" ? loadDeliverySettings : view === "reports" ? loadReports : view === "security" ? loadSecurity : load;
+  const viewLoading = view === "orders" ? ordersLoading : view === "coupons" ? couponsLoading : view === "offers" ? offersLoading : view === "banners" ? bannersLoading : view === "feedback" ? feedbackLoading : view === "customers" ? customersLoading : view === "delivery" ? deliverySettingsLoading : view === "reports" ? reportsLoading : view === "security" ? securityLoading : loading;
+  const refreshView = view === "orders" ? () => loadFilteredOrders(orderFilter) : view === "coupons" ? loadCoupons : view === "offers" ? loadOffers : view === "banners" ? loadBanners : view === "feedback" ? loadFeedback : view === "customers" ? loadCustomers : view === "delivery" ? loadDeliverySettings : view === "reports" ? loadReports : view === "security" ? loadSecurity : load;
 
   return (
     <>
@@ -1140,6 +1270,8 @@ function App() {
         {view === "customers" && <CustomersPage customers={customers} total={customersTotal} search={customerSearch} status={customerStatus} loading={customersLoading} error={customersError} selectedDetail={customerDetail} detailLoading={customerDetailLoading} busyAction={busyAction} onSearchChange={setCustomerSearch} onStatusChange={setCustomerStatus} onOpenCustomer={openCustomer} onCloseCustomer={() => setCustomerDetail(null)} onSaveLoyalty={saveCustomerLoyalty} onAddNote={addCustomerNote} onDeleteNote={deleteCustomerNote} onToggleBlock={toggleCustomerBlock} />}
         {view === "coupons" && <CouponsPage coupons={coupons} onNew={() => setCouponEditor({ id: null, values: { ...emptyCoupon, startsAt: toDateTimeInput(new Date()) } })} onEdit={(coupon) => setCouponEditor(toCouponEditor(coupon))} onDelete={(coupon) => requestDelete("coupon", coupon)} busyAction={busyAction} />}
         {view === "offers" && <OffersPage offers={offers} onNew={() => setOfferEditor({ id: null, values: { ...emptyOffer, startsAt: toDateTimeInput(new Date()) } })} onEdit={(offer) => setOfferEditor(toOfferEditor(offer))} onDelete={(offer) => requestDelete("offer", offer)} busyAction={busyAction} />}
+        {view === "banners" && <HeroBannersPage banners={banners} loading={bannersLoading} busyAction={busyAction} onSave={saveBanner} onDelete={(banner) => requestDelete("banner", banner)} />}
+        {view === "feedback" && <FeedbackPage feedback={feedback} total={feedbackTotal} filters={feedbackFilters} loading={feedbackLoading} error={feedbackError} busyAction={busyAction} onFilterChange={setFeedbackFilters} onUpdate={updateFeedback} />}
         {view === "delivery" && <DeliverySettingsPage settings={deliverySettings} loading={deliverySettingsLoading} onSave={saveDeliverySettings} busy={busyAction === "delivery-settings-save"} />}
         {view === "riders" && <RidersPage riders={riders} onNew={() => setRiderEditor({ id: null, values: emptyRider })} onEdit={(rider) => setRiderEditor({ id: rider._id, values: { ...emptyRider, ...rider, password: "" } })} />}
         {view === "security" && <SecurityPage session={session} admins={adminUsers} activity={adminActivity} emptyAdmin={emptyAdminUser} loading={securityLoading} error={securityError} busyAction={busyAction} canManageSecurity={can("security:manage")} onRefresh={loadSecurity} onCreateAdmin={createAdminUser} onUpdateAdmin={updateAdminUser} onChangePassword={changePassword} onLogoutAllSessions={logoutAllSessions} />}

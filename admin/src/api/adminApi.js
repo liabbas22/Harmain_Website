@@ -41,6 +41,22 @@ export const adminApi = {
   getRiders: (token) => request("/auth/admin/riders", { token }),
   getCoupons: (token) => request("/coupons", { token }),
   getOffers: (token) => request("/offers", { token }),
+  getBanners: (token) => request("/banners/admin", { token }),
+  saveBanner: (id, body, token) =>
+    request(id ? `/banners/admin/${id}` : "/banners/admin", {
+      method: id ? "PATCH" : "POST",
+      body,
+      token,
+    }),
+  deleteBanner: (id, token) =>
+    request(`/banners/admin/${id}`, { method: "DELETE", token }),
+  getFeedback: (token, { status = "all", type = "all", priority = "all", search = "" } = {}) =>
+    request(
+      `/feedback/admin?limit=100&status=${encodeURIComponent(status)}&type=${encodeURIComponent(type)}&priority=${encodeURIComponent(priority)}&search=${encodeURIComponent(search)}`,
+      { token },
+    ),
+  updateFeedback: (id, body, token) =>
+    request(`/feedback/admin/${id}`, { method: "PATCH", body, token }),
   getCustomers: (token, { search = "", status = "all" } = {}) =>
     request(
       `/customers?limit=100&search=${encodeURIComponent(search)}&status=${encodeURIComponent(status)}`,
