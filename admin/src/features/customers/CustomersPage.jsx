@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import Button from "../../components/ui/Button";
+import {
+  CardGridSkeleton,
+  InlineLoadingBar,
+  SkeletonLine,
+  TableSkeleton,
+} from "../../components/ui/LoadingStates";
 import Modal from "../../components/ui/Modal";
 import StatusBadge from "../../components/ui/StatusBadge";
 import { dateTime, money, shortId } from "../../utils/format";
@@ -49,6 +55,32 @@ const StatCard = ({ label, value }) => (
     </span>
     <b className="mt-2 block text-xl text-slate-900">{value}</b>
   </article>
+);
+
+const CustomerDetailSkeleton = () => (
+  <div className="grid gap-5 p-4 sm:p-6">
+    <CardGridSkeleton count={4} />
+    <section className="grid gap-4 lg:grid-cols-[1fr_330px]">
+      <article className="rounded-lg border border-slate-200 bg-white p-4">
+        <SkeletonLine className="h-4 w-36" />
+        <SkeletonLine className="mt-5 h-5 w-48" />
+        <SkeletonLine className="mt-3 h-4 w-56" />
+        <SkeletonLine className="mt-3 h-4 w-40" />
+        <div className="mt-5 flex gap-2">
+          <SkeletonLine className="h-6 w-20 rounded-full" />
+          <SkeletonLine className="h-6 w-24 rounded-full" />
+        </div>
+      </article>
+      <article className="rounded-lg border border-slate-200 bg-white p-4">
+        <SkeletonLine className="h-4 w-32" />
+        <div className="mt-4 grid gap-3">
+          <SkeletonLine className="h-16 w-full" />
+          <SkeletonLine className="h-16 w-full" />
+        </div>
+      </article>
+    </section>
+    <TableSkeleton rows={4} columns={4} minWidth="620px" />
+  </div>
 );
 
 function CustomerDetailsModal({
@@ -102,9 +134,13 @@ function CustomerDetailsModal({
   if (!customer) {
     return (
       <Modal title="Customer profile" onClose={onClose} size="max-w-5xl">
-        <div className="p-6 text-sm font-bold text-slate-500">
-          {loading ? "Loading customer..." : "Customer not found."}
-        </div>
+        {loading ? (
+          <CustomerDetailSkeleton />
+        ) : (
+          <div className="p-6 text-sm font-bold text-slate-500">
+            Customer not found.
+          </div>
+        )}
       </Modal>
     );
   }
@@ -451,6 +487,8 @@ export default function CustomersPage({
   onDeleteNote,
   onToggleBlock,
 }) {
+  const initialLoading = loading && !customers.length;
+
   return (
     <div className="mt-6 grid gap-5">
       <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -495,8 +533,11 @@ export default function CustomersPage({
       )}
 
       <section className="relative overflow-hidden rounded-lg border border-slate-200 bg-white">
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
+        {initialLoading ? (
+          <TableSkeleton rows={8} columns={6} minWidth="820px" />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
             <thead className="bg-slate-50 text-xs font-extrabold uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-4 py-3">Customer</th>
@@ -563,13 +604,10 @@ export default function CustomersPage({
                 </tr>
               )}
             </tbody>
-          </table>
-        </div>
-        {loading && (
-          <div className="absolute inset-x-0 top-0 h-1 overflow-hidden bg-red-100">
-            <span className="block h-full w-1/3 animate-pulse bg-brand-700" />
+            </table>
           </div>
         )}
+        {loading && !initialLoading && <InlineLoadingBar />}
       </section>
 
       {(selectedDetail || detailLoading) && (

@@ -5,6 +5,57 @@ const cleanString = (value) => (typeof value === "string" ? value.trim() : "");
 const allowedTypes = ["complaint", "feedback", "suggestion"];
 const allowedStatuses = ["new", "in_review", "resolved", "closed"];
 const allowedPriorities = ["low", "normal", "high", "urgent"];
+const closedStatuses = ["resolved", "closed"];
+const feedbackRetentionDays = 90;
+const feedbackRetentionMs = feedbackRetentionDays * 24 * 60 * 60 * 1000;
+
+const feedbackExpiryFrom = (date = new Date()) =>
+  new Date(new Date(date).getTime() + feedbackRetentionMs);
+
+const applyRetentionForStatus = (feedback, status) => {
+  if (closedStatuses.includes(status)) {
+    const resolvedAt = feedback.resolvedAt || new Date();
+    feedback.resolvedAt = resolvedAt;
+    feedback.expiresAt = feedback.expiresAt || feedbackExpiryFrom(resolvedAt);
+    return;
+  }
+
+  feedback.resolvedAt = null;
+  feedback.expiresAt = null;
+};
+
+const cleanupExpiredFeedback = async () => {
+  const now = new Date();
+  const cutoff = new Date(now.getTime() - feedbackRetentionMs);
+
+  await Feedback.deleteMany({
+    status: { $in: closedStatuses },
+    $or: [
+      { expiresAt: { $lte: now } },
+      { expiresAt: null, resolvedAt: { $lte: cutoff } },
+    ],
+  });
+
+  const missingExpiry = await Feedback.find({
+    status: { $in: closedStatuses },
+    expiresAt: null,
+    resolvedAt: { $ne: null, $gt: cutoff },
+  })
+    .select("_id resolvedAt")
+    .limit(500)
+    .lean();
+
+  if (missingExpiry.length) {
+    await Promise.all(
+      missingExpiry.map((feedback) =>
+        Feedback.updateOne(
+          { _id: feedback._id, expiresAt: null },
+          { $set: { expiresAt: feedbackExpiryFrom(feedback.resolvedAt) } },
+        ),
+      ),
+    );
+  }
+};
 
 const feedbackResponse = (feedback) => ({
   _id: feedback._id,
@@ -22,6 +73,7 @@ const feedbackResponse = (feedback) => ({
   internalNote: feedback.internalNote || "",
   handledByName: feedback.handledByName || "",
   resolvedAt: feedback.resolvedAt,
+  expiresAt: feedback.expiresAt,
   createdAt: feedback.createdAt,
   updatedAt: feedback.updatedAt,
 });
@@ -65,6 +117,8 @@ export const createFeedback = asyncHandler(async (req, res) => {
 });
 
 export const getFeedbackForAdmin = asyncHandler(async (req, res) => {
+  await cleanupExpiredFeedback();
+
   const page = Math.max(1, Number(req.query.page || 1));
   const limit = Math.min(100, Math.max(1, Number(req.query.limit || 50)));
   const filter = {};
@@ -120,9 +174,7 @@ export const updateFeedback = asyncHandler(async (req, res) => {
 
   if (allowedStatuses.includes(req.body.status)) {
     feedback.status = req.body.status;
-    feedback.resolvedAt = ["resolved", "closed"].includes(req.body.status)
-      ? new Date()
-      : null;
+    applyRetentionForStatus(feedback, req.body.status);
   }
   if (allowedPriorities.includes(req.body.priority))
     feedback.priority = req.body.priority;

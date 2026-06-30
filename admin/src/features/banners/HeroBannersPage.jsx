@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Button from "../../components/ui/Button";
+import { SkeletonLine } from "../../components/ui/LoadingStates";
 import StatusBadge from "../../components/ui/StatusBadge";
 import { emptyBanner } from "../../constants/admin";
 import { dateTime } from "../../utils/format";
@@ -28,6 +29,27 @@ const Field = ({ label, hint, children, full = false }) => (
     {children}
     {hint && <small className="text-[11px] font-semibold leading-5 text-slate-500">{hint}</small>}
   </label>
+);
+
+const BannerSkeleton = () => (
+  <div className="grid gap-4 rounded-lg border border-slate-200 p-3 sm:grid-cols-[180px_1fr] lg:grid-cols-[240px_1fr]">
+    <SkeletonLine className="h-36 w-full rounded-md" />
+    <div className="min-w-0">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="grid flex-1 gap-3">
+          <SkeletonLine className="h-4 w-44" />
+          <SkeletonLine className="h-3 w-full" />
+          <SkeletonLine className="h-3 w-2/3" />
+        </div>
+        <SkeletonLine className="h-6 w-20" />
+      </div>
+      <div className="mt-5 grid gap-3 sm:grid-cols-3">
+        <SkeletonLine className="h-10 w-full" />
+        <SkeletonLine className="h-10 w-full" />
+        <SkeletonLine className="h-10 w-full" />
+      </div>
+    </div>
+  </div>
 );
 
 export default function HeroBannersPage({
@@ -77,9 +99,10 @@ export default function HeroBannersPage({
           </div>
           <div className="grid gap-3 p-4">
             {loading && (
-              <div className="rounded-lg border border-dashed border-slate-200 p-6 text-center text-sm font-bold text-slate-500">
-                Loading banners...
-              </div>
+              <>
+                <BannerSkeleton />
+                <BannerSkeleton />
+              </>
             )}
             {!loading &&
               banners.map((banner) => {

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Button from "../../components/ui/Button";
+import { CardGridSkeleton, SkeletonLine } from "../../components/ui/LoadingStates";
 import { money } from "../../utils/format";
 
 const newId = (prefix) => `${prefix}-${Date.now()}-${Math.random()}`;
@@ -118,6 +119,40 @@ const toPayload = (values) => ({
   })),
 });
 
+function DeliverySettingsSkeleton() {
+  return (
+    <div className="grid gap-5">
+      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <SkeletonLine className="h-20 w-full sm:col-span-2" />
+            <SkeletonLine className="h-20 w-full" />
+            <SkeletonLine className="h-20 w-full" />
+            <SkeletonLine className="h-20 w-full" />
+            <SkeletonLine className="h-20 w-full" />
+            <SkeletonLine className="h-20 w-full sm:col-span-2" />
+          </div>
+          <CardGridSkeleton count={1} className="grid-cols-1" />
+        </div>
+      </section>
+      <article className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+        <div className="border-b border-slate-100 px-5 py-5">
+          <SkeletonLine className="h-4 w-48" />
+          <SkeletonLine className="mt-2 h-3 w-64" />
+        </div>
+        <div className="grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 8 }).map((_, index) => (
+            <SkeletonLine
+              key={index}
+              className={index === 6 ? "h-16 w-full sm:col-span-2" : "h-16 w-full"}
+            />
+          ))}
+        </div>
+      </article>
+    </div>
+  );
+}
+
 export default function DeliverySettingsPage({ settings, loading, onSave, busy }) {
   const [values, setValues] = useState(() => toForm(settings));
 
@@ -185,6 +220,7 @@ export default function DeliverySettingsPage({ settings, loading, onSave, busy }
     0,
   );
   const firstZone = values.branches.flatMap((branch) => branch.zones)[0] || {};
+  const initialLoading = loading && !settings;
 
   return (
     <div className="mt-6 grid gap-5">
@@ -198,6 +234,9 @@ export default function DeliverySettingsPage({ settings, loading, onSave, busy }
         </div>
       </section>
 
+      {initialLoading ? (
+        <DeliverySettingsSkeleton />
+      ) : (
       <form className="grid gap-5" onSubmit={(event) => { event.preventDefault(); onSave(toPayload(values)); }}>
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
@@ -359,6 +398,7 @@ export default function DeliverySettingsPage({ settings, loading, onSave, busy }
           <Button type="submit" disabled={busy}>{busy ? "Saving..." : "Save delivery settings"}</Button>
         </div>
       </form>
+      )}
     </div>
   );
 }

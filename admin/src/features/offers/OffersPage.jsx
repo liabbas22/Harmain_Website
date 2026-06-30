@@ -1,4 +1,5 @@
 import Button from "../../components/ui/Button";
+import { InlineLoadingBar, TableSkeleton } from "../../components/ui/LoadingStates";
 import StatusBadge from "../../components/ui/StatusBadge";
 import { dateTime, money } from "../../utils/format";
 
@@ -16,7 +17,9 @@ const targetLabel = (offer) => {
 };
 const offerState = (offer) => !offer.isActive ? ["unavailable", "Inactive"] : offer.expiresAt && new Date(offer.expiresAt) <= new Date() ? ["failed", "Expired"] : ["available", "Active"];
 
-export default function OffersPage({ offers, onNew, onEdit, onDelete, busyAction }) {
+export default function OffersPage({ offers, loading, onNew, onEdit, onDelete, busyAction }) {
+  const initialLoading = loading && !offers.length;
+
   return (
     <div className="mt-6 grid gap-5">
       <section className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -26,12 +29,15 @@ export default function OffersPage({ offers, onNew, onEdit, onDelete, busyAction
         </div>
         <Button className="w-full sm:w-auto" onClick={onNew}>Create offer</Button>
       </section>
-      <section className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <section className="relative overflow-hidden rounded-lg border border-slate-200 bg-white">
         <div className="border-b border-slate-100 px-5 py-5">
           <h3 className="text-base font-extrabold text-slate-900">Live offers</h3>
           <p className="mt-1 text-xs text-slate-500">{offers.length} automatic offers in this workspace</p>
         </div>
-        <div className="overflow-x-auto">
+        {initialLoading ? (
+          <TableSkeleton rows={7} columns={8} minWidth="980px" />
+        ) : (
+          <div className="overflow-x-auto">
           <table className="w-full min-w-[980px] border-collapse">
             <thead>
               <tr className="h-11 border-b border-slate-200 bg-slate-50 text-left text-[11px] font-extrabold uppercase tracking-wide text-slate-500">
@@ -76,7 +82,9 @@ export default function OffersPage({ offers, onNew, onEdit, onDelete, busyAction
               {!offers.length && <tr><td colSpan="8" className="px-4 py-12 text-center text-sm text-slate-500">No automatic offers created yet.</td></tr>}
             </tbody>
           </table>
-        </div>
+          </div>
+        )}
+        {loading && !initialLoading && <InlineLoadingBar />}
       </section>
     </div>
   );

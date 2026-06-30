@@ -1,7 +1,10 @@
 import Button from "../../components/ui/Button";
+import { InlineLoadingBar, TableSkeleton } from "../../components/ui/LoadingStates";
 import StatusBadge from "../../components/ui/StatusBadge";
 
-export default function RidersPage({ riders, onNew, onEdit }) {
+export default function RidersPage({ riders, loading, onNew, onEdit }) {
+  const initialLoading = loading && !riders.length;
+
   return (
     <div className="grid gap-5 mt-6">
       <section className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -17,8 +20,11 @@ export default function RidersPage({ riders, onNew, onEdit }) {
           Add rider
         </Button>
       </section>
-      <section className="overflow-hidden bg-white border rounded-lg border-slate-200">
-        <div className="overflow-x-auto">
+      <section className="relative overflow-hidden bg-white border rounded-lg border-slate-200">
+        {initialLoading ? (
+          <TableSkeleton rows={5} columns={4} minWidth="640px" />
+        ) : (
+          <div className="overflow-x-auto">
           <table className="w-full min-w-[640px] border-collapse">
             <thead>
               <tr className="h-11 border-b border-slate-200 bg-slate-50 text-left text-[11px] font-extrabold uppercase tracking-wide text-slate-500">
@@ -74,7 +80,9 @@ export default function RidersPage({ riders, onNew, onEdit }) {
               )}
             </tbody>
           </table>
-        </div>
+          </div>
+        )}
+        {loading && !initialLoading && <InlineLoadingBar />}
       </section>
     </div>
   );

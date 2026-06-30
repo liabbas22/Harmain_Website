@@ -358,7 +358,18 @@ const cancellationReport = async (range) => {
       { $match: cancelledMatch },
       {
         $group: {
-          _id: "$refundStatus",
+          _id: {
+            $cond: [
+              {
+                $or: [
+                  { $eq: ["$refundStatus", null] },
+                  { $eq: ["$refundStatus", ""] },
+                ],
+              },
+              "not_required",
+              "$refundStatus",
+            ],
+          },
           orders: { $sum: 1 },
           amount: { $sum: "$refundAmount" },
         },

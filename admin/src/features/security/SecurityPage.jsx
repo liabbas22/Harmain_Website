@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import Button from "../../components/ui/Button";
+import { SkeletonLine, TableSkeleton } from "../../components/ui/LoadingStates";
 import {
   ADMIN_PERMISSION_LABELS,
   ADMIN_ROLE_OPTIONS,
@@ -104,6 +105,7 @@ export default function SecurityPage({
     () => admins.filter((admin) => admin.isActive !== false).length,
     [admins],
   );
+  const initialSecurityLoading = loading && canManageSecurity && !admins.length && !activity.length;
 
   const updateDraft = (admin, changes) => {
     const adminId = admin._id || admin.id;
@@ -443,7 +445,32 @@ export default function SecurityPage({
             </Button>
           </div>
           <div className="mt-5 grid gap-4">
-            {admins.map((admin) => {
+            {initialSecurityLoading ? (
+              [0, 1, 2].map((item) => (
+                <article
+                  key={item}
+                  className="rounded-lg border border-slate-200 p-4"
+                >
+                  <div className="grid gap-4 lg:grid-cols-[1fr_150px_130px_auto] lg:items-end">
+                    <div>
+                      <SkeletonLine className="h-4 w-28" />
+                      <SkeletonLine className="mt-3 h-11 w-full" />
+                      <SkeletonLine className="mt-2 h-3 w-48" />
+                    </div>
+                    <SkeletonLine className="h-11 w-full" />
+                    <SkeletonLine className="h-11 w-full" />
+                    <SkeletonLine className="h-10 w-20" />
+                  </div>
+                  <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_1fr]">
+                    <SkeletonLine className="h-11 w-full" />
+                    <div className="flex flex-wrap gap-2">
+                      <SkeletonLine className="h-6 w-28 rounded-full" />
+                      <SkeletonLine className="h-6 w-32 rounded-full" />
+                    </div>
+                  </div>
+                </article>
+              ))
+            ) : admins.map((admin) => {
               const adminId = admin._id || admin.id;
               const draft = draftFor(admin);
               const isSelf = adminId === session.user?.id;
@@ -567,7 +594,10 @@ export default function SecurityPage({
             </p>
           </div>
           <div className="mt-5 max-h-[440px] overflow-y-auto rounded-lg border border-slate-200">
-            <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
+            {initialSecurityLoading ? (
+              <TableSkeleton rows={8} columns={4} minWidth="720px" />
+            ) : (
+              <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
               <thead className="sticky top-0 bg-slate-50 text-xs font-extrabold uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-4 py-3">Admin</th>
@@ -607,7 +637,8 @@ export default function SecurityPage({
                   </tr>
                 )}
               </tbody>
-            </table>
+              </table>
+            )}
           </div>
         </div>
       )}

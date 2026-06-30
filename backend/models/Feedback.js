@@ -29,6 +29,7 @@ const feedbackSchema = new mongoose.Schema(
     adminReply: { type: String, trim: true, default: "", maxlength: 1000 },
     internalNote: { type: String, trim: true, default: "", maxlength: 1000 },
     resolvedAt: { type: Date, default: null },
+    expiresAt: { type: Date, default: null },
     handledBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -41,6 +42,7 @@ const feedbackSchema = new mongoose.Schema(
 
 feedbackSchema.index({ createdAt: -1 });
 feedbackSchema.index({ status: 1, priority: 1, createdAt: -1 });
+feedbackSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 const Feedback =
   mongoose.models.Feedback || mongoose.model("Feedback", feedbackSchema);

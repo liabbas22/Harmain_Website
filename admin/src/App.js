@@ -243,7 +243,7 @@ const createBannerPayload = (values) => ({
 function App() {
   const [session, setSession] = useState(readAdminSession);
   const [view, setView] = useState("overview");
-  const [toast, setToast] = useState(null);
+  const [toasts, setToasts] = useState([]);
   const [productQuery, setProductQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [productEditor, setProductEditor] = useState(null);
@@ -306,6 +306,7 @@ function App() {
   const [securityLoading, setSecurityLoading] = useState(false);
   const [securityError, setSecurityError] = useState("");
   const orderRequestRef = useRef(0);
+  const toastHistoryRef = useRef(new Map());
 
   const logout = useCallback(() => {
     clearAdminSession();
@@ -319,6 +320,7 @@ function App() {
     setConfirmation(null);
     setCancelEditor(null);
     setOrderDetails(null);
+    setToasts([]);
     setOrderFilter("all");
     setOrderPage(1);
     setOrderLimit(20);
@@ -353,7 +355,38 @@ function App() {
     setSecurityError("");
   }, []);
 
-  const notify = useCallback((message, type = "success") => setToast({ message, type, id: Date.now() }), []);
+  const dismissToast = useCallback((toastId) => {
+    setToasts((current) => current.filter((toast) => toast.id !== toastId));
+  }, []);
+
+  const notify = useCallback((message, type = "success") => {
+    const now = Date.now();
+    const key = `${type}:${message}`;
+    const lastShownAt = toastHistoryRef.current.get(key) || 0;
+    if (now - lastShownAt < 3000) return;
+
+    toastHistoryRef.current.set(key, now);
+    toastHistoryRef.current.forEach((shownAt, historyKey) => {
+      if (now - shownAt > 15000) toastHistoryRef.current.delete(historyKey);
+    });
+
+    const id = `${Date.now()}-${Math.random()}`;
+    const needsAttention = ["info", "warning", "error"].includes(type);
+    setToasts((current) => {
+      if (current.some((toast) => toast.message === message && toast.type === type)) {
+        return current;
+      }
+      const stackPosition = Math.min(current.length, 4);
+      const nextToast = {
+        message,
+        type,
+        id,
+        entryDelay: stackPosition * 220,
+        dismissAfter: (needsAttention ? 10500 : 5200) + stackPosition * 1300,
+      };
+      return [nextToast, ...current].slice(0, 5);
+    });
+  }, []);
 
   const updateSession = useCallback((nextSession) => {
     setSession((current) => {
@@ -702,13 +735,6 @@ function App() {
     handleStockRestored,
     handleFeedbackCreated,
   );
-
-  useEffect(() => {
-    if (!toast) return undefined;
-    const attentionToast = ["info", "warning", "error"].includes(toast.type);
-    const timer = window.setTimeout(() => setToast(null), attentionToast ? 8000 : 3500);
-    return () => window.clearTimeout(timer);
-  }, [toast]);
 
   useEffect(() => {
     if (view !== "overview" || orderDetails) return undefined;
@@ -1348,18 +1374,18 @@ function App() {
     <>
       <AdminShell session={session} view={view} onViewChange={setView} onLogout={logout} loading={viewLoading} onRefresh={refreshView} newOrderCount={unreadOrderIds.size} newFeedbackCount={feedbackNewCount} realtimeConnected={realtimeConnected}>
         {error && <div className="mt-5 flex items-center justify-between gap-4 border-l-4 border-brand-600 bg-red-50 px-4 py-3 text-sm font-bold text-brand-700"><span>{error}</span><button className="text-xs font-extrabold underline" onClick={load}>Try again</button></div>}
-        {view === "overview" && <OverviewPage metrics={metrics} orders={orders} products={products} unreadOrderIds={unreadOrderIds} onMarkOrderRead={markOrderRead} onNavigate={setView} onOpenOrder={setOrderDetails} />}
-        {view === "products" && <ProductsPage products={filteredProducts} categories={categories} query={productQuery} categoryFilter={categoryFilter} onQueryChange={setProductQuery} onCategoryFilterChange={setCategoryFilter} onNew={() => setProductEditor({ id: null, values: { ...emptyProduct(categories[0]?._id || ""), options: [{ clientId: newOptionId(), name: "Regular", actualPrice: "", discountPrice: "", tag: "" }] } })} onEdit={(product) => setProductEditor(toProductEditor(product))} onDelete={(product) => requestDelete("product", product)} onExport={exportProducts} onImport={importProducts} busyAction={busyAction} />}
-        {view === "categories" && <CategoriesPage categories={categories} products={products} onNew={() => setCategoryEditor({ id: null, values: emptyCategory })} onEdit={(category) => setCategoryEditor({ id: category._id, values: { ...emptyCategory, ...category } })} onDelete={(category) => requestDelete("category", category)} busyAction={busyAction} />}
+        {view === "overview" && <OverviewPage metrics={metrics} orders={orders} products={products} unreadOrderIds={unreadOrderIds} loading={loading} onMarkOrderRead={markOrderRead} onNavigate={setView} onOpenOrder={setOrderDetails} />}
+        {view === "products" && <ProductsPage products={filteredProducts} categories={categories} query={productQuery} categoryFilter={categoryFilter} loading={loading} onQueryChange={setProductQuery} onCategoryFilterChange={setCategoryFilter} onNew={() => setProductEditor({ id: null, values: { ...emptyProduct(categories[0]?._id || ""), options: [{ clientId: newOptionId(), name: "Regular", actualPrice: "", discountPrice: "", tag: "" }] } })} onEdit={(product) => setProductEditor(toProductEditor(product))} onDelete={(product) => requestDelete("product", product)} onExport={exportProducts} onImport={importProducts} busyAction={busyAction} />}
+        {view === "categories" && <CategoriesPage categories={categories} products={products} loading={loading} onNew={() => setCategoryEditor({ id: null, values: emptyCategory })} onEdit={(category) => setCategoryEditor({ id: category._id, values: { ...emptyCategory, ...category } })} onDelete={(category) => requestDelete("category", category)} busyAction={busyAction} />}
         {view === "orders" && <OrdersPage orders={filteredOrders} total={filteredOrdersTotal} pagination={orderPagination} page={orderPage} limit={orderLimit} filter={orderFilter} unreadOrderIds={unreadOrderIds} onMarkOrderRead={markOrderRead} onFilterChange={changeOrderFilter} onPageChange={setOrderPage} onLimitChange={changeOrderLimit} onUpdate={updateOrder} onCancel={(order) => setCancelEditor({ order })} onOpenOrder={setOrderDetails} busyAction={busyAction} loading={ordersLoading} error={ordersError} />}
         {view === "reports" && <ReportsPage report={report} range={reportRange} onRangeChange={setReportRange} loading={reportsLoading} error={reportsError} />}
         {view === "customers" && <CustomersPage customers={customers} total={customersTotal} search={customerSearch} status={customerStatus} loading={customersLoading} error={customersError} selectedDetail={customerDetail} detailLoading={customerDetailLoading} busyAction={busyAction} onSearchChange={setCustomerSearch} onStatusChange={setCustomerStatus} onOpenCustomer={openCustomer} onCloseCustomer={() => setCustomerDetail(null)} onSaveLoyalty={saveCustomerLoyalty} onAddNote={addCustomerNote} onDeleteNote={deleteCustomerNote} onToggleBlock={toggleCustomerBlock} />}
         {view === "coupons" && <CouponsPage coupons={coupons} onNew={() => setCouponEditor({ id: null, values: { ...emptyCoupon, startsAt: toDateTimeInput(new Date()) } })} onEdit={(coupon) => setCouponEditor(toCouponEditor(coupon))} onDelete={(coupon) => requestDelete("coupon", coupon)} busyAction={busyAction} />}
-        {view === "offers" && <OffersPage offers={offers} onNew={() => setOfferEditor({ id: null, values: { ...emptyOffer, startsAt: toDateTimeInput(new Date()) } })} onEdit={(offer) => setOfferEditor(toOfferEditor(offer))} onDelete={(offer) => requestDelete("offer", offer)} busyAction={busyAction} />}
+        {view === "offers" && <OffersPage offers={offers} loading={offersLoading} onNew={() => setOfferEditor({ id: null, values: { ...emptyOffer, startsAt: toDateTimeInput(new Date()) } })} onEdit={(offer) => setOfferEditor(toOfferEditor(offer))} onDelete={(offer) => requestDelete("offer", offer)} busyAction={busyAction} />}
         {view === "banners" && <HeroBannersPage banners={banners} loading={bannersLoading} busyAction={busyAction} onSave={saveBanner} onDelete={(banner) => requestDelete("banner", banner)} />}
         {view === "feedback" && <FeedbackPage feedback={feedback} total={feedbackTotal} filters={feedbackFilters} loading={feedbackLoading} error={feedbackError} busyAction={busyAction} onFilterChange={setFeedbackFilters} onUpdate={updateFeedback} onMarkRead={markFeedbackRead} />}
         {view === "delivery" && <DeliverySettingsPage settings={deliverySettings} loading={deliverySettingsLoading} onSave={saveDeliverySettings} busy={busyAction === "delivery-settings-save"} />}
-        {view === "riders" && <RidersPage riders={riders} onNew={() => setRiderEditor({ id: null, values: emptyRider })} onEdit={(rider) => setRiderEditor({ id: rider._id, values: { ...emptyRider, ...rider, password: "" } })} />}
+        {view === "riders" && <RidersPage riders={riders} loading={loading} onNew={() => setRiderEditor({ id: null, values: emptyRider })} onEdit={(rider) => setRiderEditor({ id: rider._id, values: { ...emptyRider, ...rider, password: "" } })} />}
         {view === "security" && <SecurityPage session={session} admins={adminUsers} activity={adminActivity} emptyAdmin={emptyAdminUser} loading={securityLoading} error={securityError} busyAction={busyAction} canManageSecurity={can("security:manage")} onRefresh={loadSecurity} onCreateAdmin={createAdminUser} onUpdateAdmin={updateAdminUser} onChangePassword={changePassword} onLogoutAllSessions={logoutAllSessions} />}
       </AdminShell>
       {productEditor && <ProductEditor editor={productEditor} categories={categories} products={products} onChange={setProductEditor} onClose={() => setProductEditor(null)} onSave={saveProduct} busy={busyAction === "product-save"} />}
@@ -1371,7 +1397,7 @@ function App() {
       {alertDialog && <AlertDialog title={alertDialog.title} message={alertDialog.message} onClose={() => setAlertDialog(null)} />}
       {confirmation && <ConfirmDialog title={confirmation.title} message={confirmation.message} onCancel={() => setConfirmation(null)} onConfirm={confirmDelete} />}
       {orderDetails && <OrderDetailsModal order={orderDetails} riders={riders} onAssignRider={assignRider} assigning={busyAction === `rider-${orderDetails._id}`} onUpdateOrder={updateOrder} updatingOrder={busyAction === `order-${orderDetails._id}`} onClose={() => setOrderDetails(null)} />}
-      <Toast toast={toast} />
+      <Toast toasts={toasts} onDismiss={dismissToast} />
     </>
   );
 }

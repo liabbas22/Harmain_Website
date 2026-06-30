@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import Button from "../../components/ui/Button";
+import { InlineLoadingBar, TableSkeleton } from "../../components/ui/LoadingStates";
 import ProductThumb from "../../components/ui/ProductThumb";
 import StatusBadge from "../../components/ui/StatusBadge";
 import { money } from "../../utils/format";
@@ -17,10 +18,12 @@ export default function ProductsPage({
   onExport,
   onImport,
   busyAction,
+  loading,
 }) {
   const importRef = useRef(null);
   const importing = busyAction === "product-import";
   const exporting = busyAction === "product-export";
+  const initialLoading = loading && !products.length;
 
   return (
     <div className="mt-6 grid gap-5">
@@ -78,7 +81,7 @@ export default function ProductsPage({
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <section className="relative overflow-hidden rounded-lg border border-slate-200 bg-white">
         <div className="border-b border-slate-100 px-5 py-5">
           <h2 className="text-base font-extrabold text-slate-900">
             Menu catalogue
@@ -87,7 +90,10 @@ export default function ProductsPage({
             {products.length} products match the current filters
           </p>
         </div>
-        <div className="overflow-x-auto">
+        {initialLoading ? (
+          <TableSkeleton rows={8} columns={7} minWidth="900px" />
+        ) : (
+          <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] border-collapse">
             <thead>
               <tr className="h-11 border-b border-slate-200 bg-slate-50 text-left text-[11px] font-extrabold uppercase tracking-wide text-slate-500">
@@ -216,7 +222,9 @@ export default function ProductsPage({
               )}
             </tbody>
           </table>
-        </div>
+          </div>
+        )}
+        {loading && !initialLoading && <InlineLoadingBar />}
       </section>
     </div>
   );
