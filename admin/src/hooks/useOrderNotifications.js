@@ -4,12 +4,20 @@ import { io } from "socket.io-client";
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 const SOCKET_URL = API_URL.replace(/\/api\/?$/, "");
 
-export function useOrderNotifications(token, onOrderCreated, onOrderUpdated, onStockAlert, onStockRestored) {
+export function useOrderNotifications(
+  token,
+  onOrderCreated,
+  onOrderUpdated,
+  onStockAlert,
+  onStockRestored,
+  onFeedbackCreated,
+) {
   const [connected, setConnected] = useState(false);
   const createdHandlerRef = useRef(onOrderCreated);
   const updatedHandlerRef = useRef(onOrderUpdated);
   const stockAlertHandlerRef = useRef(onStockAlert);
   const stockRestoredHandlerRef = useRef(onStockRestored);
+  const feedbackCreatedHandlerRef = useRef(onFeedbackCreated);
 
   useEffect(() => {
     createdHandlerRef.current = onOrderCreated;
@@ -26,6 +34,10 @@ export function useOrderNotifications(token, onOrderCreated, onOrderUpdated, onS
   useEffect(() => {
     stockRestoredHandlerRef.current = onStockRestored;
   }, [onStockRestored]);
+
+  useEffect(() => {
+    feedbackCreatedHandlerRef.current = onFeedbackCreated;
+  }, [onFeedbackCreated]);
 
   useEffect(() => {
     if (!token) {
@@ -45,6 +57,9 @@ export function useOrderNotifications(token, onOrderCreated, onOrderUpdated, onS
     socket.on("order:updated", ({ order }) => updatedHandlerRef.current?.(order));
     socket.on("stock:alert", (alert) => stockAlertHandlerRef.current?.(alert));
     socket.on("stock:restored", (event) => stockRestoredHandlerRef.current?.(event));
+    socket.on("feedback:created", ({ feedback }) =>
+      feedbackCreatedHandlerRef.current?.(feedback),
+    );
 
     return () => socket.disconnect();
   }, [token]);

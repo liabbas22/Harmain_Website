@@ -221,18 +221,16 @@ export default function Checkout() {
     appliedDiscount?.extraDiscount ?? Math.max(0, discount - itemDiscount),
   );
   const delivery = discountQuote?.delivery || null;
-  const deliveryFee = Number(discountQuote?.deliveryFee ?? delivery?.deliveryFee ?? 0);
+  const deliveryFee = Number(
+    discountQuote?.deliveryFee ?? delivery?.deliveryFee ?? 0,
+  );
   const minimumOrder = Number(delivery?.minimumOrder ?? MINIMUM_ORDER);
   const minimumOrderRemaining = Number(
     delivery?.minimumOrderRemaining ?? Math.max(0, minimumOrder - paidTotal),
   );
-  const grandTotal = Number(discountQuote?.grandTotal ?? Math.max(0, total - discount + deliveryFee));
   const activeOfferDetails =
     appliedDiscount?.details || [];
   const isCheckingSavings = quoteLoading && items.length > 0;
-  const deliveryUnavailable = delivery?.isDeliveryEnabled === false;
-  const deliveryUnavailableMessage =
-    delivery?.message || "Delivery is not available for this city or area.";
   const deliveryBranches = useMemo(
     () => (Array.isArray(delivery?.branches) ? delivery.branches : []),
     [delivery],
@@ -286,7 +284,25 @@ export default function Checkout() {
         return options;
       }, []);
   }, [deliveryBranches, form.city]);
+  const hasSelectedDeliveryArea = Boolean(
+    form.city && form.area && hasOption(areaOptions, form.area),
+  );
+  const visibleDeliveryFee = hasSelectedDeliveryArea ? deliveryFee : 0;
+  const deliveryUnavailable =
+    hasSelectedDeliveryArea && delivery?.isDeliveryEnabled === false;
+  const deliveryUnavailableMessage =
+    delivery?.message || "Delivery is not available for this city or area.";
+  const grandTotal = Number(
+    discountQuote?.grandTotal !== undefined
+      ? Math.max(
+          0,
+          discountQuote.grandTotal -
+            (hasSelectedDeliveryArea ? 0 : deliveryFee),
+        )
+      : Math.max(0, total - discount + visibleDeliveryFee),
+  );
   const canPlaceOrder =
+    hasSelectedDeliveryArea &&
     paidTotal >= minimumOrder &&
     !deliveryUnavailable &&
     delivery?.isMinimumMet !== false;
@@ -389,6 +405,10 @@ export default function Checkout() {
   };
   const submit = async (event) => {
     event.preventDefault();
+    if (!hasSelectedDeliveryArea) {
+      setStatus("Please select your delivery area first.");
+      return;
+    }
     if (deliveryUnavailable) {
       setStatus(deliveryUnavailableMessage);
       return;
@@ -619,7 +639,9 @@ export default function Checkout() {
                 !canPlaceOrder
               }
               title={
-                deliveryUnavailable
+                !hasSelectedDeliveryArea
+                  ? "Select delivery area to calculate delivery fee"
+                  : deliveryUnavailable
                   ? deliveryUnavailableMessage
                   : !canPlaceOrder
                     ? `Minimum order is Rs. ${formatMoney(minimumOrder)}`
@@ -632,6 +654,8 @@ export default function Checkout() {
                 ? "Placing order..."
                 : quoteLoading
                   ? "Checking savings..."
+                  : !hasSelectedDeliveryArea
+                    ? "Select delivery area"
                   : deliveryUnavailable
                     ? "Delivery unavailable"
                     : "Place order"}
@@ -849,7 +873,12 @@ export default function Checkout() {
                   <b>- Rs. {formatMoney(extraDiscount)}</b>
                 </div>
               )}
-              {!cartLoading && !isCheckingSavings && delivery && (
+              {!cartLoading && !isCheckingSavings && !hasSelectedDeliveryArea && (
+                <div className="rounded-lg bg-red-50/70 px-3 py-2 text-xs font-bold text-gray-600">
+                  Select your delivery area to calculate the exact delivery fee.
+                </div>
+              )}
+              {!cartLoading && !isCheckingSavings && hasSelectedDeliveryArea && delivery && (
                 <div className={deliveryUnavailable ? "text-red-700" : delivery.isFreeDelivery ? "text-green-700" : "text-gray-600"}>
                   <div className="flex justify-between">
                     <span>Delivery fee</span>

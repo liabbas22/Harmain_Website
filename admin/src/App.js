@@ -278,6 +278,7 @@ function App() {
   const [bannersLoading, setBannersLoading] = useState(false);
   const [feedback, setFeedback] = useState([]);
   const [feedbackTotal, setFeedbackTotal] = useState(0);
+  const [feedbackNewCount, setFeedbackNewCount] = useState(0);
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [feedbackError, setFeedbackError] = useState("");
   const [feedbackFilters, setFeedbackFilters] = useState({
@@ -330,6 +331,7 @@ function App() {
     setBanners([]);
     setFeedback([]);
     setFeedbackTotal(0);
+    setFeedbackNewCount(0);
     setFeedbackError("");
     setFeedbackFilters({
       status: "all",
@@ -457,6 +459,7 @@ function App() {
     if (!can("feedback:manage")) {
       setFeedback([]);
       setFeedbackTotal(0);
+      setFeedbackNewCount(0);
       return;
     }
     setFeedbackLoading(true);
@@ -465,6 +468,7 @@ function App() {
       const result = await adminApi.getFeedback(session.token, feedbackFilters);
       setFeedback(result.feedback || []);
       setFeedbackTotal(result.pagination?.total || 0);
+      setFeedbackNewCount(Number(result.newCount || 0));
     } catch (requestError) {
       if (requestError.status === 401 || requestError.status === 403) logout();
       else setFeedbackError(requestError.message || "Could not load feedback.");
@@ -472,6 +476,24 @@ function App() {
       setFeedbackLoading(false);
     }
   }, [can, feedbackFilters, logout, session?.token]);
+
+  const loadFeedbackCount = useCallback(async () => {
+    if (!session?.token) return;
+    if (!can("feedback:manage")) {
+      setFeedbackNewCount(0);
+      return;
+    }
+    try {
+      const result = await adminApi.getFeedback(session.token, { limit: 1 });
+      setFeedbackNewCount(Number(result.newCount || 0));
+    } catch (requestError) {
+      if (requestError.status === 401 || requestError.status === 403) logout();
+    }
+  }, [can, logout, session?.token]);
+
+  useEffect(() => {
+    loadFeedbackCount();
+  }, [loadFeedbackCount]);
 
   useEffect(() => {
     if (view !== "feedback") return undefined;
@@ -664,12 +686,21 @@ function App() {
     notify(`${product.name} stock restored by ${quantity}. Current stock ${product.stock}.`, "info");
   }, [notify, setProducts]);
 
+  const handleFeedbackCreated = useCallback((feedbackItem) => {
+    if (!feedbackItem?._id) return;
+    if (!can("feedback:manage")) return;
+    setFeedbackNewCount((current) => current + 1);
+    if (view === "feedback") loadFeedback();
+    notify(`New ${feedbackItem.type || "feedback"} received.`, "info");
+  }, [can, loadFeedback, notify, view]);
+
   const realtimeConnected = useOrderNotifications(
     session?.token,
     handleOrderCreated,
     handleOrderUpdated,
     handleStockAlert,
     handleStockRestored,
+    handleFeedbackCreated,
   );
 
   useEffect(() => {
@@ -941,14 +972,39 @@ function App() {
   const updateFeedback = async (feedbackId, values) => {
     setBusyAction(`feedback-${feedbackId}`);
     try {
-      const updated = await adminApi.updateFeedback(feedbackId, values, session.token);
+      const result = await adminApi.updateFeedback(feedbackId, values, session.token);
+      const updated = result.feedback || result;
       setFeedback((current) =>
         current.map((entry) => entry._id === feedbackId ? { ...entry, ...updated } : entry),
       );
+      if (typeof result.newCount === "number") {
+        setFeedbackNewCount(result.newCount);
+      }
       notify("Feedback updated.");
       return true;
     } catch (requestError) {
       notify(requestError.message || "Feedback could not be updated.", "error");
+      return false;
+    } finally {
+      setBusyAction("");
+    }
+  };
+
+  const markFeedbackRead = async (feedbackId) => {
+    setBusyAction(`feedback-read-${feedbackId}`);
+    try {
+      const result = await adminApi.markFeedbackRead(feedbackId, session.token);
+      const updated = result.feedback || result;
+      setFeedback((current) =>
+        current.map((entry) => entry._id === feedbackId ? { ...entry, ...updated } : entry),
+      );
+      if (typeof result.newCount === "number") {
+        setFeedbackNewCount(result.newCount);
+      }
+      notify("Feedback marked as read.");
+      return true;
+    } catch (requestError) {
+      notify(requestError.message || "Feedback could not be marked as read.", "error");
       return false;
     } finally {
       setBusyAction("");
@@ -1290,7 +1346,7 @@ function App() {
 
   return (
     <>
-      <AdminShell session={session} view={view} onViewChange={setView} onLogout={logout} loading={viewLoading} onRefresh={refreshView} newOrderCount={unreadOrderIds.size} realtimeConnected={realtimeConnected}>
+      <AdminShell session={session} view={view} onViewChange={setView} onLogout={logout} loading={viewLoading} onRefresh={refreshView} newOrderCount={unreadOrderIds.size} newFeedbackCount={feedbackNewCount} realtimeConnected={realtimeConnected}>
         {error && <div className="mt-5 flex items-center justify-between gap-4 border-l-4 border-brand-600 bg-red-50 px-4 py-3 text-sm font-bold text-brand-700"><span>{error}</span><button className="text-xs font-extrabold underline" onClick={load}>Try again</button></div>}
         {view === "overview" && <OverviewPage metrics={metrics} orders={orders} products={products} unreadOrderIds={unreadOrderIds} onMarkOrderRead={markOrderRead} onNavigate={setView} onOpenOrder={setOrderDetails} />}
         {view === "products" && <ProductsPage products={filteredProducts} categories={categories} query={productQuery} categoryFilter={categoryFilter} onQueryChange={setProductQuery} onCategoryFilterChange={setCategoryFilter} onNew={() => setProductEditor({ id: null, values: { ...emptyProduct(categories[0]?._id || ""), options: [{ clientId: newOptionId(), name: "Regular", actualPrice: "", discountPrice: "", tag: "" }] } })} onEdit={(product) => setProductEditor(toProductEditor(product))} onDelete={(product) => requestDelete("product", product)} onExport={exportProducts} onImport={importProducts} busyAction={busyAction} />}
@@ -1301,7 +1357,7 @@ function App() {
         {view === "coupons" && <CouponsPage coupons={coupons} onNew={() => setCouponEditor({ id: null, values: { ...emptyCoupon, startsAt: toDateTimeInput(new Date()) } })} onEdit={(coupon) => setCouponEditor(toCouponEditor(coupon))} onDelete={(coupon) => requestDelete("coupon", coupon)} busyAction={busyAction} />}
         {view === "offers" && <OffersPage offers={offers} onNew={() => setOfferEditor({ id: null, values: { ...emptyOffer, startsAt: toDateTimeInput(new Date()) } })} onEdit={(offer) => setOfferEditor(toOfferEditor(offer))} onDelete={(offer) => requestDelete("offer", offer)} busyAction={busyAction} />}
         {view === "banners" && <HeroBannersPage banners={banners} loading={bannersLoading} busyAction={busyAction} onSave={saveBanner} onDelete={(banner) => requestDelete("banner", banner)} />}
-        {view === "feedback" && <FeedbackPage feedback={feedback} total={feedbackTotal} filters={feedbackFilters} loading={feedbackLoading} error={feedbackError} busyAction={busyAction} onFilterChange={setFeedbackFilters} onUpdate={updateFeedback} />}
+        {view === "feedback" && <FeedbackPage feedback={feedback} total={feedbackTotal} filters={feedbackFilters} loading={feedbackLoading} error={feedbackError} busyAction={busyAction} onFilterChange={setFeedbackFilters} onUpdate={updateFeedback} onMarkRead={markFeedbackRead} />}
         {view === "delivery" && <DeliverySettingsPage settings={deliverySettings} loading={deliverySettingsLoading} onSave={saveDeliverySettings} busy={busyAction === "delivery-settings-save"} />}
         {view === "riders" && <RidersPage riders={riders} onNew={() => setRiderEditor({ id: null, values: emptyRider })} onEdit={(rider) => setRiderEditor({ id: rider._id, values: { ...emptyRider, ...rider, password: "" } })} />}
         {view === "security" && <SecurityPage session={session} admins={adminUsers} activity={adminActivity} emptyAdmin={emptyAdminUser} loading={securityLoading} error={securityError} busyAction={busyAction} canManageSecurity={can("security:manage")} onRefresh={loadSecurity} onCreateAdmin={createAdminUser} onUpdateAdmin={updateAdminUser} onChangePassword={changePassword} onLogoutAllSessions={logoutAllSessions} />}

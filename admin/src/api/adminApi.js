@@ -59,13 +59,15 @@ export const adminApi = {
     }),
   deleteBanner: (id, token) =>
     request(`/banners/admin/${id}`, { method: "DELETE", token }),
-  getFeedback: (token, { status = "all", type = "all", priority = "all", search = "" } = {}) =>
+  getFeedback: (token, { status = "all", type = "all", priority = "all", search = "", limit = 100 } = {}) =>
     request(
-      `/feedback/admin?limit=100&status=${encodeURIComponent(status)}&type=${encodeURIComponent(type)}&priority=${encodeURIComponent(priority)}&search=${encodeURIComponent(search)}`,
+      `/feedback/admin?limit=${encodeURIComponent(limit)}&status=${encodeURIComponent(status)}&type=${encodeURIComponent(type)}&priority=${encodeURIComponent(priority)}&search=${encodeURIComponent(search)}`,
       { token },
     ),
   updateFeedback: (id, body, token) =>
     request(`/feedback/admin/${id}`, { method: "PATCH", body, token }),
+  markFeedbackRead: (id, token) =>
+    request(`/feedback/admin/${id}/read`, { method: "PATCH", token }),
   getCustomers: (token, { search = "", status = "all" } = {}) =>
     request(
       `/customers?limit=100&search=${encodeURIComponent(search)}&status=${encodeURIComponent(status)}`,

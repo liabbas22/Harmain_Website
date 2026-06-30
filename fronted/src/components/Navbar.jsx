@@ -17,6 +17,10 @@ import { FiMessageSquare, FiUser } from "react-icons/fi";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import CartDrawer from "./CartDrawer";
 import api from "../api";
+import {
+  BLOCKED_ACCOUNT_MESSAGE,
+  ensureActiveCustomer,
+} from "../utils/customerAccess";
 
 const MINIMUM_ORDER = 500;
 
@@ -27,6 +31,8 @@ const Navbar = () => {
   const [cartModel, setCartModel] = useState(false);
   const [menuBar, setMenuBar] = useState(false);
   const [menuBarVisible, setMenuBarVisible] = useState(false);
+  const [blockedDialog, setBlockedDialog] = useState(null);
+  const [checkingCartAccess, setCheckingCartAccess] = useState(false);
 
   const [showButtons, setShowButtons] = useState(false);
 
@@ -48,6 +54,16 @@ const Navbar = () => {
     window.addEventListener("harmain-user-updated", syncUser);
     return () => window.removeEventListener("harmain-user-updated", syncUser);
   }, [location.pathname]);
+
+  useEffect(() => {
+    const showBlockedDialog = (event) => {
+      setCartModel(false);
+      setBlockedDialog(event.detail?.message || BLOCKED_ACCOUNT_MESSAGE);
+    };
+    window.addEventListener("harmain-account-blocked", showBlockedDialog);
+    return () =>
+      window.removeEventListener("harmain-account-blocked", showBlockedDialog);
+  }, []);
 
   useEffect(() => {
     const loadCartCount = async () => {
@@ -100,7 +116,18 @@ const Navbar = () => {
     setPickupButton(true);
   };
 
-  const handleCart = () => {
+  const handleCart = async () => {
+    if (!localStorage.getItem("harmain_token")) {
+      navigate("/login");
+      return;
+    }
+    setCheckingCartAccess(true);
+    const access = await ensureActiveCustomer();
+    setCheckingCartAccess(false);
+    if (!access.ok) {
+      if (access.reason === "unauthenticated") navigate("/login");
+      return;
+    }
     setCartModel(true);
   };
 
@@ -182,10 +209,15 @@ const Navbar = () => {
           </div>
 
           <button
-            className="relative p-2 text-xl rounded-full hover:bg-red-100"
+            className="relative p-2 text-xl rounded-full hover:bg-red-100 disabled:cursor-wait disabled:opacity-60"
             onClick={handleCart}
+            disabled={checkingCartAccess}
           >
-            <BsCartFill />
+            {checkingCartAccess ? (
+              <span className="block w-5 h-5 border-2 border-red-100 rounded-full animate-spin border-t-red-700" />
+            ) : (
+              <BsCartFill />
+            )}
             <span className="absolute top-[2px] right-[2px] w-4 h-4 text-[9px] bg-red-700 text-white rounded-full flex items-center justify-center border border-white">
               {cartCount}
             </span>
@@ -386,6 +418,47 @@ const Navbar = () => {
               <button className="px-4 py-2 mt-3 text-white bg-red-700 rounded-xl hover:bg-red-600 w-fit">
                 Browse Products
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {blockedDialog && (
+        <div
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm"
+          onClick={() => setBlockedDialog(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start gap-4">
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-red-100 text-xl font-extrabold text-red-700">
+                !
+              </span>
+              <div>
+                <h3 className="text-lg font-extrabold text-gray-900">
+                  Account access restricted
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-gray-600">
+                  {blockedDialog}
+                </p>
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setBlockedDialog(null)}
+                className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-extrabold text-gray-700 hover:bg-gray-50"
+              >
+                OK
+              </button>
+              <Link
+                to="/complainform"
+                onClick={() => setBlockedDialog(null)}
+                className="rounded-lg bg-red-700 px-4 py-2 text-sm font-extrabold text-white hover:bg-red-800"
+              >
+                Contact support
+              </Link>
             </div>
           </div>
         </div>

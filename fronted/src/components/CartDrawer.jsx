@@ -8,6 +8,10 @@ import {
   FaTrash,
 } from "react-icons/fa6";
 import api from "../api";
+import {
+  isBlockedAccountError,
+  notifyAccountBlocked,
+} from "../utils/customerAccess";
 
 const MINIMUM_ORDER = 500;
 
@@ -33,14 +37,22 @@ export default function CartDrawer({ onClose }) {
   }, []);
   const change = async (id, quantity, optionName = "", specialInstructions = "", addOnsKey = "") => {
     if (quantity < 1) return remove(id, optionName, specialInstructions, addOnsKey);
-    await api.patch(`/cart/${id}`, { quantity, optionName, specialInstructions, addOnsKey });
-    await load();
-    window.dispatchEvent(new Event("harmain-cart-updated"));
+    try {
+      await api.patch(`/cart/${id}`, { quantity, optionName, specialInstructions, addOnsKey });
+      await load();
+      window.dispatchEvent(new Event("harmain-cart-updated"));
+    } catch (error) {
+      if (isBlockedAccountError(error)) notifyAccountBlocked(error.response?.data?.message);
+    }
   };
   const remove = async (id, optionName = "", specialInstructions = "", addOnsKey = "") => {
-    await api.delete(`/cart/${id}`, { params: { optionName, specialInstructions, addOnsKey } });
-    await load();
-    window.dispatchEvent(new Event("harmain-cart-updated"));
+    try {
+      await api.delete(`/cart/${id}`, { params: { optionName, specialInstructions, addOnsKey } });
+      await load();
+      window.dispatchEvent(new Event("harmain-cart-updated"));
+    } catch (error) {
+      if (isBlockedAccountError(error)) notifyAccountBlocked(error.response?.data?.message);
+    }
   };
   const add = async (id) => {
     const product = products.find((entry) => entry._id === id);
@@ -51,9 +63,13 @@ export default function CartDrawer({ onClose }) {
       Number(product.stock) <= 0
     )
       return;
-    await api.post("/cart", { productId: id, quantity: 1 });
-    await load();
-    window.dispatchEvent(new Event("harmain-cart-updated"));
+    try {
+      await api.post("/cart", { productId: id, quantity: 1 });
+      await load();
+      window.dispatchEvent(new Event("harmain-cart-updated"));
+    } catch (error) {
+      if (isBlockedAccountError(error)) notifyAccountBlocked(error.response?.data?.message);
+    }
   };
   const addComboProduct = async (product) => {
     if (!product?._id) return;
@@ -63,6 +79,8 @@ export default function CartDrawer({ onClose }) {
       await api.post("/cart", { productId: product._id, quantity: 1, optionName });
       await load();
       window.dispatchEvent(new Event("harmain-cart-updated"));
+    } catch (error) {
+      if (isBlockedAccountError(error)) notifyAccountBlocked(error.response?.data?.message);
     } finally {
       setComboAddingId("");
     }

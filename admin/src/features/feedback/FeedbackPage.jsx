@@ -25,7 +25,7 @@ const statusTone = {
   closed: "refunded",
 };
 
-function FeedbackCard({ item, busyAction, onUpdate }) {
+function FeedbackCard({ item, busyAction, onUpdate, onMarkRead }) {
   const [draft, setDraft] = useState({
     status: item.status,
     priority: item.priority,
@@ -48,6 +48,7 @@ function FeedbackCard({ item, busyAction, onUpdate }) {
   };
 
   const busy = busyAction === `feedback-${item._id}`;
+  const readBusy = busyAction === `feedback-read-${item._id}`;
 
   return (
     <article className="rounded-lg border border-slate-200 bg-white p-4">
@@ -126,9 +127,26 @@ function FeedbackCard({ item, busyAction, onUpdate }) {
             }
             placeholder="Internal admin note"
           />
-          <Button type="submit" className="min-h-10" disabled={busy}>
-            {busy ? "Saving..." : "Save response"}
-          </Button>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {item.status === "new" && (
+              <Button
+                type="button"
+                variant="secondary"
+                className="min-h-10"
+                disabled={readBusy}
+                onClick={() => onMarkRead(item._id)}
+              >
+                {readBusy ? "Marking..." : "Mark read"}
+              </Button>
+            )}
+            <Button
+              type="submit"
+              className={item.status === "new" ? "min-h-10" : "min-h-10 sm:col-span-2"}
+              disabled={busy}
+            >
+              {busy ? "Saving..." : "Save response"}
+            </Button>
+          </div>
         </form>
       </div>
     </article>
@@ -144,6 +162,7 @@ export default function FeedbackPage({
   busyAction,
   onFilterChange,
   onUpdate,
+  onMarkRead,
 }) {
   const updateFilter = (key, value) => onFilterChange({ ...filters, [key]: value });
 
@@ -236,6 +255,7 @@ export default function FeedbackPage({
               item={item}
               busyAction={busyAction}
               onUpdate={onUpdate}
+              onMarkRead={onMarkRead}
             />
           ))}
 

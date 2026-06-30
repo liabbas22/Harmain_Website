@@ -9,6 +9,7 @@ export default function AdminShell({
   loading,
   onRefresh,
   newOrderCount = 0,
+  newFeedbackCount = 0,
   realtimeConnected = false,
   children,
 }) {
@@ -47,6 +48,7 @@ export default function AdminShell({
             >
               <span>{label}</span>
               {id === "orders" && newOrderCount > 0 && <span className="grid h-5 min-w-5 place-items-center rounded-full bg-white px-1 text-[10px] font-extrabold text-brand-700">{newOrderCount > 99 ? "99+" : newOrderCount}</span>}
+              {id === "feedback" && newFeedbackCount > 0 && <span className="grid h-5 min-w-5 place-items-center rounded-full bg-white px-1 text-[10px] font-extrabold text-brand-700">{newFeedbackCount > 99 ? "99+" : newFeedbackCount}</span>}
             </button>
           ))}
         </nav>

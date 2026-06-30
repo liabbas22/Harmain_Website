@@ -2,6 +2,7 @@ import express from "express";
 import {
   createFeedback,
   getFeedbackForAdmin,
+  markFeedbackRead,
   updateFeedback,
 } from "../controllers/feedbackController.js";
 import { authorize, protect } from "../middleware/authMiddleware.js";
@@ -17,6 +18,14 @@ router.get(
   authorize("admin"),
   requirePermission("feedback:manage"),
   getFeedbackForAdmin,
+);
+router.patch(
+  "/admin/:id/read",
+  protect,
+  authorize("admin"),
+  requirePermission("feedback:manage"),
+  auditActivity("feedback.read", "feedback"),
+  markFeedbackRead,
 );
 router.patch(
   "/admin/:id",

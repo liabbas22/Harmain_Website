@@ -2,6 +2,11 @@ import React, { useEffect, useState } from "react";
 import ModalDetailsPage from "./ModalDetailsPage";
 import OfferBadge from "./OfferBadge";
 import api from "../api";
+import {
+  ensureActiveCustomer,
+  isBlockedAccountError,
+  notifyAccountBlocked,
+} from "../utils/customerAccess";
 
 const PopularItemCards = ({ item }) => {
   const [modelVisible, setModelVisible] = useState(false);
@@ -11,6 +16,7 @@ const PopularItemCards = ({ item }) => {
   const [selectedAddOns, setSelectedAddOns] = useState([]);
   const [specialInstructions, setSpecialInstructions] = useState("");
   const [toast, setToast] = useState(false);
+  const [errorToast, setErrorToast] = useState("");
   const isOutOfStock = item?.isOutOfStock === true || Number(item?.stock) <= 0;
   const isAvailable = item?.isAvailable !== false && !isOutOfStock;
   const availabilityLabel = isOutOfStock
@@ -35,6 +41,11 @@ const PopularItemCards = ({ item }) => {
     if (!isAvailable) return;
     if (!localStorage.getItem("harmain_token"))
       return window.location.assign("/login");
+    const access = await ensureActiveCustomer();
+    if (!access.ok) {
+      if (access.reason === "blocked") handleCloseModal();
+      return;
+    }
     try {
       await api.post("/cart", {
         productId: item.id,
@@ -48,7 +59,13 @@ const PopularItemCards = ({ item }) => {
       setToast(true);
       window.setTimeout(() => setToast(false), 2600);
     } catch (error) {
-      alert(error.response?.data?.message || "Could not add item to cart");
+      if (isBlockedAccountError(error)) {
+        notifyAccountBlocked(error.response?.data?.message);
+        handleCloseModal();
+        return;
+      }
+      setErrorToast(error.response?.data?.message || "Could not add item to cart");
+      window.setTimeout(() => setErrorToast(""), 2800);
     }
   };
 
@@ -67,6 +84,11 @@ const PopularItemCards = ({ item }) => {
             OK
           </span>
           {item?.title} added to cart successfully
+        </div>
+      )}
+      {errorToast && (
+        <div className="fixed top-5 left-1/2 z-[70] flex -translate-x-1/2 items-center gap-2 rounded-xl bg-red-700 px-4 py-3 text-sm font-bold text-white shadow-xl">
+          {errorToast}
         </div>
       )}
       <div

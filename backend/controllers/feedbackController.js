@@ -52,10 +52,15 @@ export const createFeedback = asyncHandler(async (req, res) => {
     orderNumber: cleanString(req.body.orderNumber).slice(0, 40),
     message,
   });
+  const response = feedbackResponse(feedback);
+
+  req.app.get("io")?.to("admin-orders").emit("feedback:created", {
+    feedback: response,
+  });
 
   res.status(201).json({
     message: "Thank you. Your message has been submitted.",
-    feedback: feedbackResponse(feedback),
+    feedback: response,
   });
 });
 
@@ -77,19 +82,36 @@ export const getFeedbackForAdmin = asyncHandler(async (req, res) => {
     ];
   }
 
-  const [items, total] = await Promise.all([
+  const [items, total, newCount] = await Promise.all([
     Feedback.find(filter)
       .sort({ status: 1, priority: -1, createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit)
       .lean(),
     Feedback.countDocuments(filter),
+    Feedback.countDocuments({ status: "new" }),
   ]);
 
   res.json({
     feedback: items.map(feedbackResponse),
     pagination: { page, limit, total, pages: Math.ceil(total / limit) || 1 },
+    newCount,
   });
+});
+
+export const markFeedbackRead = asyncHandler(async (req, res) => {
+  const feedback = await Feedback.findById(req.params.id);
+  if (!feedback) return res.status(404).json({ message: "Feedback not found" });
+
+  if (feedback.status === "new") {
+    feedback.status = "in_review";
+    feedback.handledBy = req.user._id;
+    feedback.handledByName = req.user.name || "Admin";
+    await feedback.save();
+  }
+
+  const newCount = await Feedback.countDocuments({ status: "new" });
+  res.json({ feedback: feedbackResponse(feedback), newCount });
 });
 
 export const updateFeedback = asyncHandler(async (req, res) => {
@@ -112,5 +134,6 @@ export const updateFeedback = asyncHandler(async (req, res) => {
   feedback.handledByName = req.user.name || "Admin";
 
   await feedback.save();
-  res.json(feedbackResponse(feedback));
+  const newCount = await Feedback.countDocuments({ status: "new" });
+  res.json({ feedback: feedbackResponse(feedback), newCount });
 });

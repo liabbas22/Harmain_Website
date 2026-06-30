@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import ModalDetailsPage from "./ModalDetailsPage";
 import OfferBadge from "./OfferBadge";
 import api from "../api";
+import { ensureActiveCustomer } from "../utils/customerAccess";
 
 const CategoryCard = ({ item }) => {
   const [modelVisible, setModelVisible] = useState(false);
@@ -48,6 +49,11 @@ const CategoryCard = ({ item }) => {
     if (!isAvailable) return;
     if (!localStorage.getItem("harmain_token"))
       return window.location.assign("/login");
+    const access = await ensureActiveCustomer();
+    if (!access.ok) {
+      if (access.reason === "blocked") handleCloseModal();
+      return;
+    }
     try {
       await api.post("/cart", {
         productId: item.id,

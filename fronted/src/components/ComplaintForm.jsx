@@ -10,14 +10,24 @@ const initialForm = {
   phone: "",
   email: "",
   branch: "",
+  type: "complaint",
   complaint: "",
 };
+
+const messageTypes = [
+  ["complaint", "Complaint"],
+  ["feedback", "Feedback"],
+  ["suggestion", "Suggestion"],
+];
 
 const ComplaintForm = () => {
   const [formData, setFormData] = useState(initialForm);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
+  const selectedTypeLabel =
+    messageTypes.find(([value]) => value === formData.type)?.[1] ||
+    "Complaint";
 
   const handleChange = (event) => {
     setFormData({
@@ -32,7 +42,7 @@ const ComplaintForm = () => {
     setError("");
 
     if (formData.complaint.trim().length < 10) {
-      setError("Please write complete complaint details.");
+      setError(`Please write complete ${selectedTypeLabel.toLowerCase()} details.`);
       return;
     }
 
@@ -43,11 +53,13 @@ const ComplaintForm = () => {
         phone: formData.phone,
         email: formData.email,
         branch: formData.branch,
-        type: "complaint",
-        subject: "Website complaint",
+        type: formData.type,
+        subject: `Website ${selectedTypeLabel.toLowerCase()}`,
         message: formData.complaint,
       });
-      setSuccess("Your complaint has been submitted. Our team will contact you shortly.");
+      setSuccess(
+        `Your ${selectedTypeLabel.toLowerCase()} has been submitted. Our team will contact you shortly.`,
+      );
       setFormData(initialForm);
     } catch (requestError) {
       setError(apiError(requestError));
@@ -70,7 +82,7 @@ const ComplaintForm = () => {
           </span>
 
           <h1 className="mt-5 text-4xl font-extrabold text-gray-900 md:text-6xl">
-            Complaint Form
+            Feedback Form
           </h1>
 
           <p className="max-w-2xl mx-auto mt-4 text-gray-600 md:text-lg">
@@ -175,7 +187,31 @@ const ComplaintForm = () => {
 
             <div>
               <label className="block mb-2 font-semibold text-gray-700">
-                Complaint Details
+                Message Type
+              </label>
+
+              <div className="flex items-center gap-3 px-4 border-2 border-gray-200 rounded-2xl focus-within:border-red-500">
+                <FiMessageSquare className="text-xl text-red-700" />
+
+                <select
+                  name="type"
+                  value={formData.type}
+                  onChange={handleChange}
+                  className="w-full py-4 bg-transparent outline-none"
+                  required
+                >
+                  {messageTypes.map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block mb-2 font-semibold text-gray-700">
+                {selectedTypeLabel} Details
               </label>
 
               <div className="flex gap-3 px-4 border-2 border-gray-200 rounded-2xl focus-within:border-red-500">
@@ -185,7 +221,7 @@ const ComplaintForm = () => {
                   name="complaint"
                   value={formData.complaint}
                   onChange={handleChange}
-                  placeholder="Write your complaint here..."
+                  placeholder={`Write your ${selectedTypeLabel.toLowerCase()} here...`}
                   className="w-full h-40 py-4 bg-transparent outline-none resize-none"
                   required
                 />
@@ -209,7 +245,7 @@ const ComplaintForm = () => {
               disabled={submitting}
               className="flex items-center justify-center w-full gap-3 px-6 py-4 text-lg font-bold text-white transition-all duration-300 bg-red-700 shadow-xl rounded-2xl hover:bg-red-600 hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {submitting ? "Submitting..." : "Submit Complaint"}
+              {submitting ? "Submitting..." : `Submit ${selectedTypeLabel}`}
               <span className="transition-all duration-200 group-hover:translate-x-1">
                 -&gt;
               </span>
