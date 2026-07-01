@@ -137,6 +137,58 @@ const quantityExpression = {
   $ifNull: ["$items.grossQuantity", "$items.quantity"],
 };
 
+const normalizedRefundStatusExpression = {
+  $let: {
+    vars: {
+      status: {
+        $replaceAll: {
+          input: {
+            $replaceAll: {
+              input: {
+                $trim: {
+                  input: { $toLower: { $ifNull: ["$refundStatus", ""] } },
+                },
+              },
+              find: "-",
+              replacement: "_",
+            },
+          },
+          find: " ",
+          replacement: "_",
+        },
+      },
+    },
+    in: {
+      $switch: {
+        branches: [
+          {
+            case: {
+              $in: [
+                "$$status",
+                ["", "not_required", "notrequired", "none", "no_refund"],
+              ],
+            },
+            then: "not_required",
+          },
+          {
+            case: { $in: ["$$status", ["pending", "processing"]] },
+            then: "$$status",
+          },
+          {
+            case: { $in: ["$$status", ["completed", "complete", "refunded"]] },
+            then: "completed",
+          },
+          {
+            case: { $in: ["$$status", ["failed", "fail"]] },
+            then: "failed",
+          },
+        ],
+        default: "$$status",
+      },
+    },
+  },
+};
+
 const salesTimeline = (range, unit) => {
   const format =
     unit === "week" ? "%G-W%V" : unit === "month" ? "%Y-%m" : "%Y-%m-%d";
@@ -358,18 +410,7 @@ const cancellationReport = async (range) => {
       { $match: cancelledMatch },
       {
         $group: {
-          _id: {
-            $cond: [
-              {
-                $or: [
-                  { $eq: ["$refundStatus", null] },
-                  { $eq: ["$refundStatus", ""] },
-                ],
-              },
-              "not_required",
-              "$refundStatus",
-            ],
-          },
+          _id: normalizedRefundStatusExpression,
           orders: { $sum: 1 },
           amount: { $sum: "$refundAmount" },
         },

@@ -9,6 +9,28 @@ import { dateTime, money, shortId, titleCase } from "../../utils/format";
 
 const safeList = (value) => (Array.isArray(value) ? value : []);
 
+const normalizeStatusKey = (value, fallback = "not_required") => {
+  const normalized = String(value || fallback)
+    .trim()
+    .toLowerCase()
+    .replace(/[-\s]+/g, "_");
+  return normalized || fallback;
+};
+
+const mergeRefundStatuses = (rows) =>
+  Array.from(
+    safeList(rows)
+      .reduce((map, entry) => {
+        const status = normalizeStatusKey(entry.status);
+        const current = map.get(status) || { status, orders: 0, amount: 0 };
+        current.orders += Number(entry.orders || 0);
+        current.amount += Number(entry.amount || 0);
+        map.set(status, current);
+        return map;
+      }, new Map())
+      .values(),
+  );
+
 const percent = (value, total) =>
   total > 0 ? Math.round((Number(value || 0) / total) * 100) : 0;
 
@@ -17,11 +39,9 @@ const itemName = (item) =>
 
 function MetricCard({ label, value, caption, accent = false }) {
   return (
-    <article className="p-5 bg-white border rounded-lg min-h-32 border-slate-200">
+    <article className="min-h-32 rounded-lg border border-slate-200 bg-white p-5">
       <span className="text-xs font-extrabold text-slate-500">{label}</span>
-      <strong
-        className={`my-4 block text-3xl font-extrabold ${accent ? "text-brand-700" : "text-slate-900"}`}
-      >
+      <strong className={`my-4 block text-3xl font-extrabold ${accent ? "text-brand-700" : "text-slate-900"}`}>
         {value}
       </strong>
       <small className="text-xs text-slate-500">{caption}</small>
@@ -31,7 +51,7 @@ function MetricCard({ label, value, caption, accent = false }) {
 
 function SectionHeader({ title, caption }) {
   return (
-    <div className="px-5 py-5 border-b border-slate-100">
+    <div className="border-b border-slate-100 px-5 py-5">
       <h2 className="text-base font-extrabold text-slate-900">{title}</h2>
       <p className="mt-1 text-xs text-slate-500">{caption}</p>
     </div>
@@ -44,24 +64,15 @@ function EmptyState({ label }) {
 
 function SalesBucket({ title, rows }) {
   const salesRows = safeList(rows);
-  const maxRevenue = Math.max(
-    ...salesRows.map((row) => Number(row.revenue || 0)),
-    1,
-  );
+  const maxRevenue = Math.max(...salesRows.map((row) => Number(row.revenue || 0)), 1);
 
   return (
     <article className="grid h-[360px] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-slate-200 bg-white">
-      <SectionHeader
-        title={title}
-        caption="Sales, discounts, and order count"
-      />
+      <SectionHeader title={title} caption="Sales, discounts, and order count" />
       {salesRows.length ? (
-        <div className="grid content-start gap-3 p-5 overflow-y-auto">
+        <div className="grid content-start gap-3 overflow-y-auto p-5">
           {salesRows.map((row) => (
-            <div
-              key={row.label}
-              className="grid grid-cols-[92px_minmax(0,1fr)_auto] items-center gap-3 text-xs"
-            >
+            <div key={row.label} className="grid grid-cols-[92px_minmax(0,1fr)_auto] items-center gap-3 text-xs">
               <span className="font-bold text-slate-600">{row.label}</span>
               <div className="h-2 overflow-hidden rounded-full bg-slate-100">
                 <span
@@ -86,15 +97,12 @@ function SalesBucket({ title, rows }) {
 function BestSellingTable({ rows }) {
   const items = safeList(rows);
   return (
-    <article className="overflow-hidden bg-white border rounded-lg border-slate-200">
-      <SectionHeader
-        title="Best-selling items"
-        caption="Ranked by total prepared quantity"
-      />
+    <article className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <SectionHeader title="Best-selling items" caption="Ranked by total prepared quantity" />
       {items.length ? (
         <div className="overflow-x-auto">
-          <table className="min-w-full text-sm text-left">
-            <thead className="text-xs font-extrabold tracking-wide uppercase bg-slate-50 text-slate-500">
+          <table className="min-w-full text-left text-sm">
+            <thead className="bg-slate-50 text-xs font-extrabold uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-5 py-3">Item</th>
                 <th className="px-5 py-3 text-right">Units</th>
@@ -106,27 +114,13 @@ function BestSellingTable({ rows }) {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {items.map((item) => (
-                <tr
-                  key={`${item.product || item.name}-${item.optionName || "regular"}`}
-                >
-                  <td className="px-5 py-4 font-extrabold text-slate-800">
-                    {itemName(item)}
-                  </td>
-                  <td className="px-5 py-4 font-bold text-right text-slate-700">
-                    {item.quantity}
-                  </td>
-                  <td className="px-5 py-4 text-right text-slate-600">
-                    {item.paidQuantity}
-                  </td>
-                  <td className="px-5 py-4 text-right text-slate-600">
-                    {item.freeQuantity}
-                  </td>
-                  <td className="px-5 py-4 text-right text-slate-600">
-                    {item.orderCount}
-                  </td>
-                  <td className="px-5 py-4 font-extrabold text-right text-slate-900">
-                    {money(item.revenue)}
-                  </td>
+                <tr key={`${item.product || item.name}-${item.optionName || "regular"}`}>
+                  <td className="px-5 py-4 font-extrabold text-slate-800">{itemName(item)}</td>
+                  <td className="px-5 py-4 text-right font-bold text-slate-700">{item.quantity}</td>
+                  <td className="px-5 py-4 text-right text-slate-600">{item.paidQuantity}</td>
+                  <td className="px-5 py-4 text-right text-slate-600">{item.freeQuantity}</td>
+                  <td className="px-5 py-4 text-right text-slate-600">{item.orderCount}</td>
+                  <td className="px-5 py-4 text-right font-extrabold text-slate-900">{money(item.revenue)}</td>
                 </tr>
               ))}
             </tbody>
@@ -144,34 +138,19 @@ function PaymentReport({ payments }) {
   const byMethod = safeList(payments?.byMethod);
   return (
     <section className="grid gap-5 xl:grid-cols-2">
-      <article className="overflow-hidden bg-white border rounded-lg border-slate-200">
-        <SectionHeader
-          title="Payment status"
-          caption="Pending, paid, failed, and refunded totals"
-        />
+      <article className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+        <SectionHeader title="Payment status" caption="Pending, paid, failed, and refunded totals" />
         {byStatus.length ? (
           <div className="divide-y divide-slate-100">
             {byStatus.map((entry) => (
-              <div
-                key={entry.status || "unknown"}
-                className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 px-5 py-4"
-              >
+              <div key={entry.status || "unknown"} className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 px-5 py-4">
                 <div>
-                  <StatusBadge
-                    value={entry.status || "pending"}
-                    label={titleCase(entry.status || "pending")}
-                  />
-                  <p className="mt-2 text-xs text-slate-500">
-                    {entry.orders} orders
-                  </p>
+                  <StatusBadge value={entry.status || "pending"} label={titleCase(entry.status || "pending")} />
+                  <p className="mt-2 text-xs text-slate-500">{entry.orders} orders</p>
                 </div>
                 <div className="text-right">
-                  <b className="block text-sm text-slate-900">
-                    {money(entry.amount)}
-                  </b>
-                  <small className="text-slate-500">
-                    Refunds {money(entry.refunds)}
-                  </small>
+                  <b className="block text-sm text-slate-900">{money(entry.amount)}</b>
+                  <small className="text-slate-500">Refunds {money(entry.refunds)}</small>
                 </div>
               </div>
             ))}
@@ -181,33 +160,19 @@ function PaymentReport({ payments }) {
         )}
       </article>
 
-      <article className="overflow-hidden bg-white border rounded-lg border-slate-200">
-        <SectionHeader
-          title="Payment methods"
-          caption="Collection split by payment method"
-        />
+      <article className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+        <SectionHeader title="Payment methods" caption="Collection split by payment method" />
         {byMethod.length ? (
           <div className="divide-y divide-slate-100">
             {byMethod.map((entry) => (
-              <div
-                key={entry.method || "unknown"}
-                className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 px-5 py-4"
-              >
+              <div key={entry.method || "unknown"} className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 px-5 py-4">
                 <div>
-                  <b className="block text-sm text-slate-800">
-                    {titleCase(entry.method || "unknown")}
-                  </b>
-                  <small className="text-slate-500">
-                    {entry.orders} orders
-                  </small>
+                  <b className="block text-sm text-slate-800">{titleCase(entry.method || "unknown")}</b>
+                  <small className="text-slate-500">{entry.orders} orders</small>
                 </div>
                 <div className="text-right">
-                  <b className="block text-sm text-slate-900">
-                    {money(entry.amount)}
-                  </b>
-                  <small className="text-slate-500">
-                    Paid {money(entry.paid)} | Pending {money(entry.pending)}
-                  </small>
+                  <b className="block text-sm text-slate-900">{money(entry.amount)}</b>
+                  <small className="text-slate-500">Paid {money(entry.paid)} | Pending {money(entry.pending)}</small>
                 </div>
               </div>
             ))}
@@ -222,54 +187,34 @@ function PaymentReport({ payments }) {
 
 function CancellationReport({ data }) {
   const reasons = safeList(data?.byReason);
-  const refundStatuses = safeList(data?.byRefundStatus);
+  const refundStatuses = mergeRefundStatuses(data?.byRefundStatus);
   const recentOrders = safeList(data?.recentOrders);
 
   return (
     <section className="grid gap-5 xl:grid-cols-[.85fr_1.15fr]">
-      <article className="overflow-hidden bg-white border rounded-lg border-slate-200">
-        <SectionHeader
-          title="Cancelled orders report"
-          caption="Reasons and refund exposure"
-        />
+      <article className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+        <SectionHeader title="Cancelled orders report" caption="Reasons and refund exposure" />
         {reasons.length ? (
           <div className="divide-y divide-slate-100">
             {reasons.map((entry) => (
-              <div
-                key={entry.reason || "other"}
-                className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 px-5 py-4"
-              >
+              <div key={entry.reason || "other"} className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 px-5 py-4">
                 <div>
-                  <b className="block text-sm text-slate-800">
-                    {titleCase(entry.reason || "other")}
-                  </b>
-                  <small className="text-slate-500">
-                    {entry.orders} cancellations
-                  </small>
+                  <b className="block text-sm text-slate-800">{titleCase(entry.reason || "other")}</b>
+                  <small className="text-slate-500">{entry.orders} cancellations</small>
                 </div>
                 <div className="text-right">
-                  <b className="block text-sm text-brand-700">
-                    {money(entry.lostSales)}
-                  </b>
-                  <small className="text-slate-500">
-                    Refund {money(entry.refundAmount)}
-                  </small>
+                  <b className="block text-sm text-brand-700">{money(entry.lostSales)}</b>
+                  <small className="text-slate-500">Refund {money(entry.refundAmount)}</small>
                 </div>
               </div>
             ))}
             {refundStatuses.length > 0 && (
-              <div className="px-5 py-4 bg-slate-50">
-                <b className="text-xs tracking-wide uppercase text-slate-500">
-                  Refund status
-                </b>
-                <div className="flex flex-wrap gap-2 mt-3">
+              <div className="bg-slate-50 px-5 py-4">
+                <b className="text-xs uppercase tracking-wide text-slate-500">Refund status</b>
+                <div className="mt-3 flex flex-wrap gap-2">
                   {refundStatuses.map((entry) => (
-                    <span
-                      key={entry.status || "none"}
-                      className="px-3 py-2 text-xs font-extrabold bg-white rounded-full text-slate-700 ring-1 ring-slate-200"
-                    >
-                      {titleCase(entry.status || "not_required")}:{" "}
-                      {entry.orders} / {money(entry.amount)}
+                    <span key={entry.status || "none"} className="rounded-full bg-white px-3 py-2 text-xs font-extrabold text-slate-700 ring-1 ring-slate-200">
+                      {titleCase(entry.status || "not_required")}: {entry.orders} / {money(entry.amount)}
                     </span>
                   ))}
                 </div>
@@ -282,13 +227,10 @@ function CancellationReport({ data }) {
       </article>
 
       <article className="grid h-[350px] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-slate-200 bg-white">
-        <SectionHeader
-          title="Recent cancellations"
-          caption="Latest cancelled orders for follow-up"
-        />
+        <SectionHeader title="Recent cancellations" caption="Latest cancelled orders for follow-up" />
         {recentOrders.length ? (
           <div className="min-h-0 overflow-auto">
-            <table className="min-w-full text-sm text-left">
+            <table className="min-w-full text-left text-sm">
               <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-extrabold uppercase tracking-wide text-slate-500 shadow-[0_1px_0_#e2e8f0]">
                 <tr>
                   <th className="px-5 py-3">Order</th>
@@ -301,23 +243,11 @@ function CancellationReport({ data }) {
               <tbody className="divide-y divide-slate-100">
                 {recentOrders.map((order) => (
                   <tr key={order._id}>
-                    <td className="px-5 py-4 font-extrabold text-slate-800">
-                      {shortId(order._id)}
-                    </td>
-                    <td className="px-5 py-4 text-slate-600">
-                      {order.user?.name ||
-                        order.deliveryAddress?.fullName ||
-                        "Customer"}
-                    </td>
-                    <td className="px-5 py-4 text-slate-600">
-                      {titleCase(order.cancellationReason || "other")}
-                    </td>
-                    <td className="px-5 py-4 text-slate-600">
-                      {titleCase(order.refundStatus || "not_required")}
-                    </td>
-                    <td className="px-5 py-4 font-extrabold text-right text-slate-900">
-                      {money(order.total)}
-                    </td>
+                    <td className="px-5 py-4 font-extrabold text-slate-800">{shortId(order._id)}</td>
+                    <td className="px-5 py-4 text-slate-600">{order.user?.name || order.deliveryAddress?.fullName || "Customer"}</td>
+                    <td className="px-5 py-4 text-slate-600">{titleCase(order.cancellationReason || "other")}</td>
+                    <td className="px-5 py-4 text-slate-600">{titleCase(order.refundStatus || "not_required")}</td>
+                    <td className="px-5 py-4 text-right font-extrabold text-slate-900">{money(order.total)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -334,15 +264,12 @@ function CancellationReport({ data }) {
 function StockUsageReport({ rows }) {
   const items = safeList(rows);
   return (
-    <article className="overflow-hidden bg-white border rounded-lg border-slate-200">
-      <SectionHeader
-        title="Stock usage report"
-        caption="Prepared units, cancelled units, and current stock"
-      />
+    <article className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+      <SectionHeader title="Stock usage report" caption="Prepared units, cancelled units, and current stock" />
       {items.length ? (
         <div className="overflow-x-auto">
-          <table className="min-w-full text-sm text-left">
-            <thead className="text-xs font-extrabold tracking-wide uppercase bg-slate-50 text-slate-500">
+          <table className="min-w-full text-left text-sm">
+            <thead className="bg-slate-50 text-xs font-extrabold uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-5 py-3">Item</th>
                 <th className="px-5 py-3 text-right">Used</th>
@@ -354,35 +281,17 @@ function StockUsageReport({ rows }) {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {items.map((item) => (
-                <tr
-                  key={`${item.product || item.name}-${item.optionName || "regular"}`}
-                >
-                  <td className="px-5 py-4 font-extrabold text-slate-800">
-                    {itemName(item)}
-                  </td>
-                  <td className="px-5 py-4 font-bold text-right text-slate-700">
-                    {item.usedUnits}
-                  </td>
-                  <td className="px-5 py-4 text-right text-slate-600">
-                    {item.cancelledUnits}
-                  </td>
-                  <td className="px-5 py-4 text-right text-slate-600">
-                    {item.orderedUnits}
-                  </td>
+                <tr key={`${item.product || item.name}-${item.optionName || "regular"}`}>
+                  <td className="px-5 py-4 font-extrabold text-slate-800">{itemName(item)}</td>
+                  <td className="px-5 py-4 text-right font-bold text-slate-700">{item.usedUnits}</td>
+                  <td className="px-5 py-4 text-right text-slate-600">{item.cancelledUnits}</td>
+                  <td className="px-5 py-4 text-right text-slate-600">{item.orderedUnits}</td>
                   <td className="px-5 py-4 text-right">
-                    <span
-                      className={
-                        Number(item.currentStock || 0) <= 5
-                          ? "font-extrabold text-brand-700"
-                          : "font-bold text-slate-700"
-                      }
-                    >
+                    <span className={Number(item.currentStock || 0) <= 5 ? "font-extrabold text-brand-700" : "font-bold text-slate-700"}>
                       {item.currentStock ?? "-"}
                     </span>
                   </td>
-                  <td className="px-5 py-4 font-extrabold text-right text-slate-900">
-                    {money(item.revenue)}
-                  </td>
+                  <td className="px-5 py-4 text-right font-extrabold text-slate-900">{money(item.revenue)}</td>
                 </tr>
               ))}
             </tbody>
@@ -404,26 +313,23 @@ function ReportLoadingSkeleton() {
             key={item}
             className="grid h-[360px] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-slate-200 bg-white"
           >
-            <div className="px-5 py-5 border-b border-slate-100">
-              <SkeletonLine className="w-32 h-4" />
-              <SkeletonLine className="h-3 mt-2 w-44" />
+            <div className="border-b border-slate-100 px-5 py-5">
+              <SkeletonLine className="h-4 w-32" />
+              <SkeletonLine className="mt-2 h-3 w-44" />
             </div>
             <div className="grid content-start gap-4 p-5">
               {[0, 1, 2, 3, 4].map((row) => (
-                <div
-                  key={row}
-                  className="grid grid-cols-[92px_minmax(0,1fr)_80px] items-center gap-3"
-                >
-                  <SkeletonLine className="w-20 h-3" />
-                  <SkeletonLine className="w-full h-2 rounded-full" />
-                  <SkeletonLine className="w-20 h-4" />
+                <div key={row} className="grid grid-cols-[92px_minmax(0,1fr)_80px] items-center gap-3">
+                  <SkeletonLine className="h-3 w-20" />
+                  <SkeletonLine className="h-2 w-full rounded-full" />
+                  <SkeletonLine className="h-4 w-20" />
                 </div>
               ))}
             </div>
           </article>
         ))}
       </section>
-      <article className="overflow-hidden bg-white border rounded-lg border-slate-200">
+      <article className="overflow-hidden rounded-lg border border-slate-200 bg-white">
         <TableSkeleton rows={7} columns={6} minWidth="780px" />
       </article>
       <section className="grid gap-5 xl:grid-cols-2">
@@ -446,37 +352,32 @@ export default function ReportsPage({
   const selectedRange = report?.range;
 
   return (
-    <div className="grid gap-5 mt-6">
+    <div className="mt-6 grid gap-5">
       <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h2 className="text-base font-extrabold text-slate-900">
-            Business reports
-          </h2>
+          <h2 className="text-base font-extrabold text-slate-900">Business reports</h2>
           <p className="mt-1 text-sm text-slate-500">
             Sales, product movement, cancellations, payments, and stock usage.
           </p>
           {selectedRange && (
             <p className="mt-2 text-xs font-bold text-slate-500">
-              {dateTime(selectedRange.from)} to {dateTime(selectedRange.to)} |{" "}
-              {selectedRange.timeZone}
+              {dateTime(selectedRange.from)} to {dateTime(selectedRange.to)} | {selectedRange.timeZone}
             </p>
           )}
         </div>
         <select
-          className="px-3 text-sm font-bold bg-white border rounded-md outline-none h-11 border-slate-300 text-slate-700 focus:border-brand-600 focus:ring-4 focus:ring-red-100"
+          className="h-11 rounded-md border border-slate-300 bg-white px-3 text-sm font-bold text-slate-700 outline-none focus:border-brand-600 focus:ring-4 focus:ring-red-100"
           value={range}
           onChange={(event) => onRangeChange(event.target.value)}
         >
           {REPORT_RANGES.map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
+            <option key={value} value={value}>{label}</option>
           ))}
         </select>
       </section>
 
       {error && (
-        <div className="px-4 py-3 text-sm font-bold border-l-4 border-brand-600 bg-red-50 text-brand-700">
+        <div className="border-l-4 border-brand-600 bg-red-50 px-4 py-3 text-sm font-bold text-brand-700">
           {error}
         </div>
       )}
@@ -488,27 +389,10 @@ export default function ReportsPage({
         </>
       ) : (
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <MetricCard
-            label="Net sales"
-            value={money(summary.netSales)}
-            caption="Non-cancelled order total"
-          />
-          <MetricCard
-            label="Orders"
-            value={summary.activeOrders || 0}
-            caption={`${summary.deliveredOrders || 0} delivered`}
-          />
-          <MetricCard
-            label="Average order"
-            value={money(summary.averageOrderValue)}
-            caption="Across non-cancelled orders"
-          />
-          <MetricCard
-            label="Cancelled"
-            value={summary.cancelledOrders || 0}
-            caption={`Refund exposure ${money(summary.refundAmount)}`}
-            accent
-          />
+          <MetricCard label="Net sales" value={money(summary.netSales)} caption="Non-cancelled order total" />
+          <MetricCard label="Orders" value={summary.activeOrders || 0} caption={`${summary.deliveredOrders || 0} delivered`} />
+          <MetricCard label="Average order" value={money(summary.averageOrderValue)} caption="Across non-cancelled orders" />
+          <MetricCard label="Cancelled" value={summary.cancelledOrders || 0} caption={`Refund exposure ${money(summary.refundAmount)}`} accent />
         </section>
       )}
 

@@ -34,33 +34,45 @@ const printStyles = `
   .total-line{display:flex;justify-content:space-between;padding:5px 0}
   .grand{border-top:1px solid #cbd5e1;margin-top:5px;padding-top:10px;color:#991b1b;font-size:16px;font-weight:800}
   .footer{border-top:1px solid #dbe1ea;margin-top:28px;padding-top:12px;color:#64748b;font-size:11px}
-  .kitchen{font-size:15px}
-  .kitchen .header{align-items:stretch;border:0;border-radius:10px;background:#111827;color:#fff;padding:16px 18px}
-  .kitchen .brand{color:#fff;font-size:24px}
-  .kitchen .eyebrow{color:#fecaca}
-  .kitchen .title{font-size:20px}
-  .kitchen .order-number{border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:10px 12px;text-align:right}
-  .kitchen .muted{color:#cbd5e1}
-  .kitchen .grid{margin:18px 0;gap:12px}
-  .kitchen .panel{border-color:#cbd5e1;border-radius:8px;background:#f8fafc}
-  .kitchen-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0 0}
-  .summary-card{border:1px solid #cbd5e1;border-radius:8px;padding:10px;background:#fff}
-  .summary-card b{display:block;margin-top:3px;font-size:16px;color:#111827}
-  .kitchen-section-title{margin:20px 0 8px;color:#111827;font-size:11px;font-weight:900;letter-spacing:.14em;text-transform:uppercase}
+  .invoice{border:1px solid #e2e8f0;border-radius:12px;padding:22px}
+  .invoice .header{align-items:flex-start;border:1px solid #fecaca;border-left:5px solid #b91c1c;border-radius:10px;background:#fff7f7;padding:16px 18px}
+  .invoice .order-number{border:1px solid #fecaca;border-radius:8px;background:#fff;padding:8px 11px;color:#991b1b}
+  .invoice .grid{gap:14px;margin:18px 0}
+  .invoice .panel{border-color:#e2e8f0;border-radius:8px;background:#fff}
+  .invoice .items{margin-top:16px}
+  .invoice .items th{border:0;background:#f8fafc;color:#475569}
+  .invoice .items th:first-child{border-radius:8px 0 0 8px}
+  .invoice .items th:last-child{border-radius:0 8px 8px 0}
+  .invoice .items td{padding:10px 6px}
+  .invoice .totals{border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;padding:10px 12px}
+  .invoice .grand{border-top:1px solid #fecaca;color:#991b1b}
+  .kitchen{max-width:620px;font-size:12px;line-height:1.35}
+  .kitchen .header{align-items:stretch;border:1px solid #fecaca;border-left:5px solid #b91c1c;border-radius:8px;background:#fff7f7;color:#172033;padding:12px 14px}
+  .kitchen .brand{color:#991b1b;font-size:19px}
+  .kitchen .eyebrow{color:#b91c1c;font-size:9px}
+  .kitchen .title{font-size:16px}
+  .kitchen .order-number{border:1px solid #fecaca;border-radius:7px;background:#fff;padding:7px 9px;color:#991b1b;text-align:right}
+  .kitchen .muted{color:#64748b}
+  .kitchen .grid{margin:12px 0;gap:10px}
+  .kitchen .panel{border-color:#e2e8f0;border-radius:7px;background:#fff;padding:10px}
+  .kitchen-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0 0}
+  .summary-card{border:1px solid #e2e8f0;border-radius:7px;padding:8px;background:#f8fafc}
+  .summary-card b{display:block;margin-top:2px;font-size:13px;color:#111827}
+  .kitchen-section-title{margin:14px 0 7px;color:#991b1b;font-size:10px;font-weight:900;letter-spacing:.14em;text-transform:uppercase}
   .kitchen-items{list-style:none;margin:0;padding:0}
-  .kitchen-items>li{break-inside:avoid;border:2px solid #111827;border-radius:10px;margin-bottom:10px;padding:12px;background:#fff}
-  .kitchen-item-main{display:grid;grid-template-columns:58px minmax(0,1fr);gap:12px;align-items:start}
-  .quantity{display:grid;min-height:46px;place-items:center;border-radius:8px;background:#111827;color:#fff;font-size:20px;font-weight:900}
-  .item-name{display:block;font-size:18px;font-weight:900;color:#111827}
-  .option{display:inline-block;margin-top:6px;border:1px solid #cbd5e1;border-radius:999px;background:#f8fafc;padding:3px 9px;color:#475569;font-size:12px;font-weight:800}
-  .combo-includes{margin:10px 0 0 70px;border:1px solid #cbd5e1;border-radius:8px;background:#f8fafc;padding:10px}
-  .combo-includes strong{display:block;margin-bottom:6px;color:#111827;font-size:11px;letter-spacing:.1em;text-transform:uppercase}
+  .kitchen-items>li{break-inside:avoid;border:1px solid #dbe1ea;border-left:4px solid #b91c1c;border-radius:8px;margin-bottom:8px;padding:10px;background:#fff}
+  .kitchen-item-main{display:grid;grid-template-columns:48px minmax(0,1fr);gap:10px;align-items:start}
+  .quantity{display:grid;min-height:38px;place-items:center;border-radius:7px;background:#b91c1c;color:#fff;font-size:16px;font-weight:900}
+  .item-name{display:block;font-size:15px;font-weight:900;color:#111827}
+  .option{display:inline-block;margin-top:5px;border:1px solid #fecaca;border-radius:999px;background:#fff7f7;padding:2px 8px;color:#991b1b;font-size:10px;font-weight:800}
+  .combo-includes{margin:8px 0 0 58px;border:1px solid #e2e8f0;border-radius:7px;background:#f8fafc;padding:8px}
+  .combo-includes strong{display:block;margin-bottom:5px;color:#111827;font-size:9px;letter-spacing:.1em;text-transform:uppercase}
   .combo-includes ul{list-style:none;margin:0;padding:0}
-  .combo-includes li{display:flex;gap:9px;border:0;padding:4px 0}
-  .combo-includes span{font-weight:900;min-width:38px;color:#111827}
+  .combo-includes li{display:flex;gap:8px;border:0;padding:3px 0}
+  .combo-includes span{font-weight:900;min-width:34px;color:#111827}
   .combo-includes em{color:#475569;font-style:normal;font-weight:700}
-  .kitchen-note{margin:8px 0 0 70px;border:1px solid #fed7aa;border-left:5px solid #b91c1c;border-radius:8px;background:#fff7ed;padding:8px 10px;color:#7f1d1d;font-weight:800}
-  .delivery-note{margin-top:14px;border:1px solid #f59e0b;border-radius:8px;background:#fffbeb;padding:12px;color:#78350f}
+  .kitchen-note{margin:7px 0 0 58px;border:1px solid #fed7aa;border-left:4px solid #b91c1c;border-radius:7px;background:#fff7ed;padding:7px 8px;color:#7f1d1d;font-weight:800}
+  .delivery-note{margin-top:10px;border:1px solid #f59e0b;border-radius:7px;background:#fffbeb;padding:9px;color:#78350f}
   @media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
 `;
 
@@ -96,7 +108,7 @@ export const printOrderInvoice = (order) => {
   const loyaltyLine = order.loyaltyDiscount ? `<div class="total-line muted"><span>${escapeHtml(order.loyaltyDiscount.label)}</span><strong>- ${escapeHtml(money(order.loyaltyDiscount.discount))}</strong></div>` : "";
   const offerBreakdown = (order.offerBreakdown || []).map((detail) => `<div class="total-line muted"><span>${Number(detail.quantity || 0)} x ${escapeHtml(detail.productName || "Menu item")}${Number(detail.freeQuantity || 0) > 0 ? ` + ${Number(detail.freeQuantity || 0)} free` : ""} - ${escapeHtml(detail.offerName || "Offer")}</span><strong>- ${escapeHtml(money(detail.discount))}</strong></div>`).join("");
   const discountLine = Number(order.discount) > 0 ? `<div class="total-line"><span>Total savings</span><strong>- ${escapeHtml(money(order.discount))}</strong></div>${couponLine}${offerLine}${loyaltyLine}${offerBreakdown}` : "";
-  const content = `<main class="document"><header class="header"><div><div class="brand">Harmain Restaurant</div><div class="eyebrow">Customer invoice</div><h1 class="title">Order receipt</h1></div><div><div class="order-number">${escapeHtml(shortId(order._id))}</div><div class="muted">${escapeHtml(dateTime(order.createdAt))}</div></div></header><section class="grid"><div class="panel"><span class="label">Customer</span><strong>${escapeHtml(order.user?.name || address.fullName || "Customer")}</strong><div class="muted">${escapeHtml(order.user?.email || "")}</div><div class="muted">${escapeHtml(address.phone || "")}</div></div><div class="panel"><span class="label">Delivery address</span><strong>${escapeHtml(address.fullName || "-")}</strong><div class="muted">${addressMarkup(address)}</div>${address.instructions ? `<div class="note">Delivery note: ${escapeHtml(address.instructions)}</div>` : ""}</div></section><table class="items"><thead><tr><th>Item</th><th class="right">Qty</th><th class="right">Price</th><th class="right">Total</th></tr></thead><tbody>${itemRows}</tbody></table><section class="totals"><div class="total-line"><span>Subtotal</span><strong>${escapeHtml(money(order.subtotal))}</strong></div>${discountLine}<div class="total-line"><span>Delivery fee</span><strong>${escapeHtml(money(order.deliveryFee))}</strong></div><div class="total-line grand"><span>Grand total</span><span>${escapeHtml(money(order.total))}</span></div></section><footer class="footer">Payment: ${escapeHtml(titleCase(order.paymentStatus || "pending"))} | Method: ${escapeHtml(titleCase(order.paymentMethod || "cash_on_delivery"))}</footer></main>`;
+  const content = `<main class="document invoice"><header class="header"><div><div class="brand">Harmain Restaurant</div><div class="eyebrow">Customer invoice</div><h1 class="title">Order receipt</h1></div><div><div class="order-number">${escapeHtml(shortId(order._id))}</div><div class="muted">${escapeHtml(dateTime(order.createdAt))}</div></div></header><section class="grid"><div class="panel"><span class="label">Customer</span><strong>${escapeHtml(order.user?.name || address.fullName || "Customer")}</strong><div class="muted">${escapeHtml(order.user?.email || "")}</div><div class="muted">${escapeHtml(address.phone || "")}</div></div><div class="panel"><span class="label">Delivery address</span><strong>${escapeHtml(address.fullName || "-")}</strong><div class="muted">${addressMarkup(address)}</div>${address.instructions ? `<div class="note">Delivery note: ${escapeHtml(address.instructions)}</div>` : ""}</div></section><table class="items"><thead><tr><th>Item</th><th class="right">Qty</th><th class="right">Price</th><th class="right">Total</th></tr></thead><tbody>${itemRows}</tbody></table><section class="totals"><div class="total-line"><span>Subtotal</span><strong>${escapeHtml(money(order.subtotal))}</strong></div>${discountLine}<div class="total-line"><span>Delivery fee</span><strong>${escapeHtml(money(order.deliveryFee))}</strong></div><div class="total-line grand"><span>Grand total</span><span>${escapeHtml(money(order.total))}</span></div></section><footer class="footer">Payment: ${escapeHtml(titleCase(order.paymentStatus || "pending"))} | Method: ${escapeHtml(titleCase(order.paymentMethod || "cash_on_delivery"))}</footer></main>`;
   printDocument(`Invoice ${shortId(order._id)}`, content);
 };
 
